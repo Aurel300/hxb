@@ -364,30 +364,30 @@ TODO: bitfield?
 
 ## Haxe (Type)
 
-### `Type(t)`
+### `Type`
 
 - enum
-  - TMono(t)
+  - 0 TMono(t)
     - cache Type t
-  - TEnum(t, params)
+  - 1 TEnum(t, params)
     - cache EnumType t
     - arr cache Type params
-  - TInst(t, params)
+  - 2 TInst(t, params)
     - cache ClassType t
     - arr cache Type params
-  - TType(t, params)
+  - 3 TType(t, params)
     - cache DefType t
     - arr cache Type params
-  - TFun(args, ret)
+  - 4 TFun(args, ret)
     - arr FunctionArg args
     - cache Type ret
-  - TAnonymous(anon)
+  - 5 TAnonymous(anon)
     - cache AnonType anon
-  - TDynamic(type)
+  - 6 TDynamic(type)
     - nullable cache Type type
-  - TLazy
+  - 7 TLazy
     - resolve, then encode
-  - TAbstract(t, params)
+  - 8 TAbstract(t, params)
     - cache AbstractType t
     - arr cache Type params
 
@@ -395,14 +395,16 @@ TODO: bitfield?
 
 - arr ClassField t.fields
 - enum t.status
-  - AClosed, AOpened, AConst
-  - AExtend(tl)
+  - 0 AClosed
+  - 1 AOpened
+  - 2 AConst
+  - 3 AExtend(tl)
     - arr cache Type tl
-  - AClassStatics(t)
+  - 4 AClassStatics(t)
     - cache ClassType t
-  - AEnumStatics(t)
+  - 5 AEnumStatics(t)
     - cache EnumType t
-  - AAbstractStatics(t)
+  - 6 AAbstractStatics(t)
     - cache AbstractType t
 
 ### `TypeParameter(p)`
@@ -472,7 +474,7 @@ TODO: bitfield?
   - c.isFinal
   - c.isInterface
 - enum c.kind
-  - 0 KNormal, 4 KGeneric, 6 KMacroType, 8 KGenericBuild
+  - 0 KNormal
   - 1 KTypeParameter(constraints)
     - arr cache Type constraints
   - 2 KExtension(cl, params), 5 KGenericInstance(cl, params):
@@ -480,8 +482,11 @@ TODO: bitfield?
     - arr cache Type params
   - 3 KExpr(e)
     - Expr e
+  - 4 KGeneric
+  - 6 KMacroType
   - 7 KAbstractImpl(a)
     - cache AbstractType a
+  - 8 KGenericBuild
 - arr ParamClassType c.interfaces
 - nullable ParamClassType c.superClass
 - arr cache ClassField c.statics
