@@ -30,12 +30,12 @@ Unsigned [LEB128](https://en.wikipedia.org/wiki/LEB128).
 
 ### `enum`
 
-- `u8` for enum case
+- u8 for enum case
 - ... associated data for case, if any
 
 ### `nullable T`
 
-- i8 present
+- u8 present
 - (if present) T
 
 ### `cache T`
@@ -369,27 +369,28 @@ No data when docs not encoded. Otherwise:
 
 ### `Type`
 
+In case of `TLazy`, resolve, then encode result.
+
 - enum
-  - 0 TMono(t)
+  - 0 TMono(null) (unbound monomorph)
+  - 1 TMono(t) (bound monomorph)
     - cache Type t
-  - 1 TEnum(t, params)
+  - 2 TEnum(t, params)
     - cache EnumType t
     - arr cache Type params
-  - 2 TInst(t, params)
+  - 3 TInst(t, params)
     - cache ClassType t
     - arr cache Type params
-  - 3 TType(t, params)
+  - 4 TType(t, params)
     - cache DefType t
     - arr cache Type params
-  - 4 TFun(args, ret)
+  - 5 TFun(args, ret)
     - arr FunctionArg args
     - cache Type ret
-  - 5 TAnonymous(anon)
+  - 6 TAnonymous(anon)
     - cache AnonType anon
-  - 6 TDynamic(type)
+  - 7 TDynamic(type)
     - nullable cache Type type
-  - 7 TLazy
-    - resolve, then encode
   - 8 TAbstract(t, params)
     - cache AbstractType t
     - arr cache Type params
