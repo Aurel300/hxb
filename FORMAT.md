@@ -51,9 +51,11 @@ Unsigned [LEB128](https://en.wikipedia.org/wiki/LEB128).
 
 No data when positions not encoded. Otherwise:
 
-- cache str p.file
 - delta p.min
-- delta p.max
+- leb128
+  - least significant bit: file present?
+  - remaining bits = delta p.max
+- (if file present) cache str p.file
 
 ### `doc`
 
