@@ -63,6 +63,14 @@ No data when docs not encoded. Otherwise:
 
 - nullable str doc
 
+### `maybeExternalType T`
+
+- enum
+  - 0 (same module)
+    - ... T
+  - 1 (different module)
+    - TypePath
+
 ## Haxe (Expr)
 
 ### `Constant`
@@ -376,13 +384,13 @@ In case of `TLazy`, resolve, then encode result.
   - 1 TMono(t) (bound monomorph)
     - cache Type t
   - 2 TEnum(t, params)
-    - cache EnumType t
+    - EnumType t
     - arr cache Type params
   - 3 TInst(t, params)
-    - cache ClassType t
+    - ClassType t
     - arr cache Type params
   - 4 TType(t, params)
-    - cache DefType t
+    - DefType t
     - arr cache Type params
   - 5 TFun(args, ret)
     - arr FunctionArg args
@@ -392,7 +400,7 @@ In case of `TLazy`, resolve, then encode result.
   - 7 TDynamic(type)
     - nullable cache Type type
   - 8 TAbstract(t, params)
-    - cache AbstractType t
+    - AbstractType t
     - arr cache Type params
 
 ### `AnonType(t)`
@@ -405,11 +413,11 @@ In case of `TLazy`, resolve, then encode result.
   - 3 AExtend(tl)
     - arr cache Type tl
   - 4 AClassStatics(t)
-    - cache ClassType t
+    - ClassType t
   - 5 AEnumStatics(t)
-    - cache EnumType t
+    - EnumType t
   - 6 AAbstractStatics(t)
-    - cache AbstractType t
+    - AbstractType t
 
 ### `TypeParameter(p)`
 
@@ -473,55 +481,59 @@ In case of `TLazy`, resolve, then encode result.
 
 ### `ClassType(c)`
 
-- BaseType c
-- bools(2)
-  - c.isFinal
-  - c.isInterface
-- enum c.kind
-  - 0 KNormal
-  - 1 KTypeParameter(constraints)
-    - arr cache Type constraints
-  - 2 KExtension(cl, params), 5 KGenericInstance(cl, params):
-    - cache ClassType cl
-    - arr cache Type params
-  - 3 KExpr(e)
-    - Expr e
-  - 4 KGeneric
-  - 6 KMacroType
-  - 7 KAbstractImpl(a)
-    - cache AbstractType a
-  - 8 KGenericBuild
-- arr ParamClassType c.interfaces
-- nullable ParamClassType c.superClass
-- arr cache ClassField c.statics
-- arr cache ClassField c.fields
-- nullable cache ClassField c.constructor
-- nullable TypedExpr c.init
-- arr cache ClassField c.overrides
+- cache maybeExternalType
+  - BaseType c
+  - bools(2)
+    - c.isFinal
+    - c.isInterface
+  - enum c.kind
+    - 0 KNormal
+    - 1 KTypeParameter(constraints)
+      - arr cache Type constraints
+    - 2 KExtension(cl, params), 5 KGenericInstance(cl, params):
+      - ClassType cl
+      - arr cache Type params
+    - 3 KExpr(e)
+      - Expr e
+    - 4 KGeneric
+    - 6 KMacroType
+    - 7 KAbstractImpl(a)
+      - AbstractType a
+    - 8 KGenericBuild
+  - arr ParamClassType c.interfaces
+  - nullable ParamClassType c.superClass
+  - arr cache ClassField c.statics
+  - arr cache ClassField c.fields
+  - nullable cache ClassField c.constructor
+  - nullable TypedExpr c.init
+  - arr cache ClassField c.overrides
 
 ### `EnumType(c)`
 
-- BaseType c
-- arr cache EnumField c.constructors.values()
-- arr cache str names
+- cache maybeExternalType
+  - BaseType c
+  - arr cache EnumField c.constructors.values()
+  - arr cache str names
 
 ### `DefType(c)`
 
-- BaseType c
-- cache Type c.type
+- cache maybeExternalType
+  - BaseType c
+  - cache Type c.type
 
 ### `AbstractType(c)`
 
-- BaseType c
-- cache Type c.type
-- nullable cache ClassType c.impl
-- arr AbstractBinop c.binops
-- arr AbstractUnop c.unops
-- arr AbstractFrom c.from
-- arr AbstractTo c.to
-- arr cache ClassField c.array
-- nullable cache ClassField c.resolve
-- nullable cache ClassField c.resolveWrite
+- cache maybeExternalType
+  - BaseType c
+  - cache Type c.type
+  - nullable ClassType c.impl
+  - arr AbstractBinop c.binops
+  - arr AbstractUnop c.unops
+  - arr AbstractFrom c.from
+  - arr AbstractTo c.to
+  - arr cache ClassField c.array
+  - nullable cache ClassField c.resolve
+  - nullable cache ClassField c.resolveWrite
 
 ### `AbstractBinop(op)`
 
@@ -600,12 +612,12 @@ In case of `TLazy`, resolve, then encode result.
     - TypedExpr e2
   - 4 TField(e, FInstance(c, params, cf))
     - TypedExpr e
-    - cache ClassType c
+    - ClassType c
     - arr cache Type params
     - cache ClassField cf
   - 5 TField(e, FStatic(c, cf))
     - TypedExpr e
-    - cache ClassType c
+    - ClassType c
     - cache ClassField cf
   - 6 TField(e, FAnon(cf))
     - TypedExpr e
@@ -619,7 +631,7 @@ In case of `TLazy`, resolve, then encode result.
     - cache ClassField cf
   - 8 TField(e, FEnum(e, ef))
     - TypedExpr e
-    - cache EnumType e
+    - EnumType e
     - cache EnumField ef
   - 9 TTypeExpr(m)
     - cache ModuleType m
@@ -635,7 +647,7 @@ In case of `TLazy`, resolve, then encode result.
     - TypedExpr e
     - arr TypedExpr el
   - 14 TNew(c, params, el)
-    - cache ClassType c
+    - ClassType c
     - arr cache Type params
     - arr TypedExpr el
   - 15 TUnop(op, postFix, e)
@@ -705,20 +717,20 @@ In case of `TLazy`, resolve, then encode result.
 
 ### `ParamClassType(c, params)`
 
-- cache ClassType c
+- ClassType c
 - arr cache Type params
 
 ### `ModuleType`
 
 - enum
   - 0 TClassDecl(c)
-    - cache ClassType c
+    - ClassType c
   - 1 TEnumDecl(c)
-    - cache EnumType c
+    - EnumType c
   - 2 TTypeDecl(c)
-    - cache DefType c
+    - DefType c
   - 3 TAbstractDecl(c)
-    - cache AbstractType c
+    - AbstractType c
 
 ### `FileEntry`
 
