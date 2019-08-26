@@ -127,8 +127,6 @@ No data when docs not encoded. Otherwise:
 
 ### `ExprDef`
 
-TODO: separate cases for all operators in EBinop, EUnop; more cases for specific argument counts of ECall
-
 - enum
   - 0 EConst(c)
     - Constant c
@@ -282,7 +280,9 @@ TODO: separate cases for all operators in EBinop, EUnop; more cases for specific
 
 ### `TypePath(p)`
 
-- str `(p.pack.concat([p.name]).concat(p.sub != null ? [p.sub] : [])).join(".")`
+- arr cache str p.pack
+- cache str p.name
+- nullable cache str p.sub
 - arr TypeParam p.params
 
 ### `TypeParam`
@@ -351,8 +351,6 @@ TODO: separate cases for all operators in EBinop, EUnop; more cases for specific
   - 4 never
 
 ### `Access`
-
-TODO: bitfield?
 
 - enum
   - 0 APublic
@@ -546,8 +544,6 @@ TODO: bitfield?
 
 ### `TConstant`
 
-TODO: some common constant values
-
 - enum
   - 0 TInt(i)
     - leb128 i
@@ -588,8 +584,6 @@ TODO: some common constant values
 - nullable TypedExpr a.value
 
 ### `TypedExprDef`
-
-TODO: separate cases for all operators in TBinop, TUnop; more cases for specific argument counts of TCall
 
 - enum
   - 0 TConst(c)
