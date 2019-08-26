@@ -43,6 +43,9 @@ Unsigned [LEB128](https://en.wikipedia.org/wiki/LEB128).
 - uleb128 - `0` when not cached, `1+` stored index
 - (if not cached) T
 
+- cache.store T - always stores T, so skip the index
+- cache.lookup T - never stores T, same as cache T
+
 ### `delta`
 
 - leb128 - signed offset from last decoded delta
@@ -604,7 +607,7 @@ In case of `TLazy`, resolve, then encode result.
 
 ### `TFuncArg(a)`
 
-- TVar a.v
+- cache.store TVar a.v
 - nullable TypedExpr a.value
 
 ### `TypedExprDef`
@@ -613,7 +616,7 @@ In case of `TLazy`, resolve, then encode result.
   - 0 TConst(c)
     - TConstant c
   - 1 TLocal(v)
-    - TVar v
+    - cache.lookup TVar v
   - 2 TArray(e1, e2)
     - TypedExpr e1
     - TypedExpr e2
@@ -668,12 +671,12 @@ In case of `TLazy`, resolve, then encode result.
     - TFunc tfunc
   - 17 TVar(v, null) (no expr)
   - 18 TVar(v, expr) (with expr)
-    - TVar v
+    - cache.lookup TVar v
     - (if 18) TypedExpr expr
   - 19 TBlock(el)
     - arr TypedExpr el
   - 20 TFor(v, e1, e2)
-    - TVar v
+    - cache.store TVar v
     - TypedExpr e1
     - TypedExpr e2
   - 21 TIf(econd, eif, null) (no else)
@@ -695,7 +698,7 @@ In case of `TLazy`, resolve, then encode result.
   - 27 TTry(e, catches)
     - TypedExpr e
     - arr catches
-      - TVar v
+      - cache.store TVar v
       - TypedExpr expr
   - 28 TReturn(null) (void return)
   - 29 TReturn(e) (value return)
