@@ -127,7 +127,7 @@ No data when docs not encoded. Otherwise:
 
 ### `ExprDef`
 
-TODO: separate cases for all operators in EBinop, EUnop ?
+TODO: separate cases for all operators in EBinop, EUnop; more cases for specific argument counts of ECall
 
 - enum
   - 0 EConst(c)
@@ -149,7 +149,8 @@ TODO: separate cases for all operators in EBinop, EUnop ?
   - 6 EArrayDecl(values)
     - arr Expr values
   - 7 ECall(e, params)
-    - arr Expr `[e].concat(params)`
+    - Expr e
+    - arr Expr params
   - 8 ENew(t:TypePath, params)
     - TypePath t
     - arr Expr params
@@ -262,7 +263,8 @@ TODO: separate cases for all operators in EBinop, EUnop ?
   - 0 TPath(p)
     - TypePath p
   - 1 TFunction(args, ret)
-    - arr ComplexType args.concat(ret)
+    - arr ComplexType args
+    - ComplexType ret
   - 2 TAnonymous(fields)
     - arr Field fields
   - 3 TParent(t)
@@ -587,7 +589,7 @@ TODO: some common constant values
 
 ### `TypedExprDef`
 
-TODO: separate cases for all operators in TBinop, TUnop ?
+TODO: separate cases for all operators in TBinop, TUnop; more cases for specific argument counts of TCall
 
 - enum
   - 0 TConst(c)
@@ -635,7 +637,8 @@ TODO: separate cases for all operators in TBinop, TUnop ?
   - 12 TArrayDecl(el)
     - arr TypedExpr el
   - 13 TCall(e, el)
-    - arr TypedExpr `[e].concat(el)`
+    - TypedExpr e
+    - arr TypedExpr el
   - 14 TNew(c, params, el)
     - cache ClassType c
     - arr cache Type params
@@ -668,7 +671,8 @@ TODO: separate cases for all operators in TBinop, TUnop ?
   - 26 TSwitch(e, cases, edef) (default case)
     - TypedExpr e
     - arr cases
-      - arr TypedExpr `values.concat(expr)`
+      - arr TypedExpr values
+      - TypedExpr expr
     - (if 26) TypedExpr edef
   - 27 TTry(e, catches)
     - TypedExpr e
