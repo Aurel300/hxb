@@ -125,6 +125,8 @@ No data when docs not encoded. Otherwise:
 
 ### `ExprDef`
 
+TODO: separate cases for all operators in EBinop, EUnop ?
+
 - enum
   - 0 EConst(c)
     - Constant c
@@ -145,8 +147,7 @@ No data when docs not encoded. Otherwise:
   - 6 EArrayDecl(values)
     - arr Expr values
   - 7 ECall(e, params)
-    - Expr e
-    - arr Expr params
+    - arr Expr `[e].concat(params)`
   - 8 ENew(t:TypePath, params)
     - TypePath t
     - arr Expr params
@@ -181,7 +182,7 @@ No data when docs not encoded. Otherwise:
     - Expr e
     - arr Case cases
     - (if 21) Expr edef
-  - 22 ETry(e, [catch]) (single catch)
+  - 22 ETry(e, `[catch]`) (single catch)
     - Expr e
     - Catch catch
   - 23 ETry(e, catches) (zero or multiple catches)
@@ -498,7 +499,7 @@ TODO: bitfield?
 ### `EnumType(c)`
 
 - BaseType c
-- arr EnumField c.constructors.values()
+- arr cache EnumField c.constructors.values()
 - arr cache str names
 
 ### `DefType(c)`
@@ -539,6 +540,168 @@ TODO: bitfield?
 - cache Type t.t
 - nullable cache ClassField t.field
 
+### `TConstant`
+
+TODO: some common constant values
+
+- enum
+  - 0 TInt(i)
+    - leb128 i
+  - 1 TFloat(s)
+    - str s
+  - 2 TString(s)
+    - str s
+  - 3 TBool(false)
+  - 4 TBool(true)
+  - 5 TNull
+  - 6 TThis
+  - 7 TSuper
+
+### `TVar(v)`
+
+- leb128 v.id
+- cache str v.name
+- cache Type v.t
+- bools(1)
+  - v.capture
+- nullable arr TVarExtra v.extra
+- nullable arr MetadataEntry v.meta
+
+### `TVarExtra(e)`
+
+- arr TypeParameter e.params
+- nullable TypedExpr e.expr
+
+### `TFunc(f)`
+
+- arr TFuncArg f.args
+- cache Type f.t
+- TypedExpr f.expr
+
+### `TFuncArg(a)`
+
+- TVar a.v
+- nullable TypedExpr a.value
+
+### `TypedExprDef`
+
+TODO: separate cases for all operators in TBinop, TUnop ?
+
+- enum
+  - 0 TConst(c)
+    - TConstant c
+  - 1 TLocal(v)
+    - TVar v
+  - 2 TArray(e1, e2)
+    - TypedExpr e1
+    - TypedExpr e2
+  - 3 TBinop(op, e1, e2)
+    - Binop op
+    - TypedExpr e1
+    - TypedExpr e2
+  - 4 TField(e, FInstance(c, params, cf))
+    - TypedExpr e
+    - cache ClassType c
+    - arr cache Type params
+    - cache ClassField cf
+  - 5 TField(e, FStatic(c, cf))
+    - TypedExpr e
+    - cache ClassType c
+    - cache ClassField cf
+  - 6 TField(e, FAnon(cf))
+    - TypedExpr e
+    - cache ClassField cf
+  - 7 TField(e, FDynamic(s))
+    - TypedExpr e
+    - cache str s
+  - 7 TField(e, FClosure(c, cf))
+    - TypedExpr e
+    - nullable ParamClassType c
+    - cache ClassField cf
+  - 8 TField(e, FEnum(e, ef))
+    - TypedExpr e
+    - cache EnumType e
+    - cache EnumField ef
+  - 9 TTypeExpr(m)
+    - cache ModuleType m
+  - 10 TParenthesis(e)
+    - TypedExpr e
+  - 11 TObjectDecl(fields)
+    - arr fields
+      - cache str name
+      - TypedExpr expr
+  - 12 TArrayDecl(el)
+    - arr TypedExpr el
+  - 13 TCall(e, el)
+    - arr TypedExpr `[e].concat(el)`
+  - 14 TNew(c, params, el)
+    - cache ClassType c
+    - arr cache Type params
+    - arr TypedExpr el
+  - 15 TUnop(op, postFix, e)
+    - Unop op, postFix
+    - TypedExpr e
+  - 16 TFunction(tfunc)
+    - TFunc tfunc
+  - 17 TVar(v, null) (no expr)
+  - 18 TVar(v, expr) (with expr)
+    - TVar v
+    - (if 18) TypedExpr expr
+  - 19 TBlock(el)
+    - arr TypedExpr el
+  - 20 TFor(v, e1, e2)
+    - TVar v
+    - TypedExpr e1
+    - TypedExpr e2
+  - 21 TIf(econd, eif, null) (no else)
+  - 22 TIf(econd, eif, eelse) (with else)
+    - TypedExpr econd
+    - TypedExpr eif
+    - (if 22) TypedExpr eelse
+  - 23 TWhile(econd, e, true) (normal while)
+  - 24 TWhile(econd, e, false) (do-while)
+    - TypedExpr econd
+    - TypedExpr e
+  - 25 TSwitch(e, cases, null) (no default)
+  - 26 TSwitch(e, cases, edef) (default case)
+    - TypedExpr e
+    - arr cases
+      - arr TypedExpr `values.concat(expr)`
+    - (if 26) TypedExpr edef
+  - 27 TTry(e, catches)
+    - TypedExpr e
+    - arr catches
+      - TVar v
+      - TypedExpr expr
+  - 28 TReturn(null) (void return)
+  - 29 TReturn(e) (value return)
+    - TypedExpr e
+  - 30 TBreak
+  - 31 TContinue
+  - 32 TThrow(e)
+    - TypedExpr e
+  - 33 TCast(e, null) (unsafe cast)
+  - 34 TCast(e, m) (safe cast)
+    - TypedExpr e
+    - (if 34) cache ModuleType m
+  - 35 TMeta(m, e)
+    - MetadataEntry m
+    - TypedExpr e
+  - 36 TEnumParameter(e, ef, index)
+    - TypedExpr e
+    - cache EnumField ef
+    - uleb128 index
+  - 37 TEnumIndex(e)
+    - TypedExpr e
+  - 38 TIdent(s)
+    - cache str s
+
+### `TypedExpr(e)`
+
+- TypedExprDef e.expr
+- pos e.pos
+- cache Type e.t
+
 ### `ParamClassType(c, params)`
 
 - cache ClassType c
@@ -560,7 +723,7 @@ TODO: bitfield?
 
 - enum
   - 0 ModuleType(m)
-    - ModuleType m
+    - cache ModuleType m
 
 ### `File`
 
