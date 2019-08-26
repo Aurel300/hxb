@@ -43,6 +43,8 @@ Unsigned [LEB128](https://en.wikipedia.org/wiki/LEB128).
 - uleb128 - `0` when not cached, `1+` stored index
 - (if not cached) T
 
+Special cases:
+
 - cache.store T - always stores T, so skip the index
 - cache.lookup T - never stores T, same as cache T
 
