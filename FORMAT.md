@@ -71,6 +71,15 @@ No data when docs not encoded. Otherwise:
   - 1 (different module)
     - TypePath
 
+### `maybeExternalField T`
+
+- enum
+  - 0 (same module)
+    - ... T
+  - 1 (different module)
+    - TypePath
+    - str
+
 ## Haxe (Expr)
 
 ### `Constant`
@@ -426,45 +435,47 @@ In case of `TLazy`, resolve, then encode result.
 
 ### `ClassField(f)`
 
-- cache str f.name
-- cache Type f.type
-- bools(3)
-  - f.isPublic
-  - f.isExtern
-  - f.isFinal
-- arr TypeParameter f.params
-- arr MetadataEntry f.meta
-- enum f.kind
-  - 0 FMethod(MethNormal)
-  - 1 FMethod(Inline)
-  - 2 FMethod(Dynamic)
-  - 3 FMethod(Macro)
-  - 10-234 FVar(r, w) - index = 10 + r * 15 + w, where r or w is:
-    - 0 AccNormal
-    - 1 AccNo
-    - 2 AccNever
-    - 3 AccResolve
-    - 4 AccCall
-    - 5 AccInline
-    - 6 AccRequire(r, msg)
-    - 7 AccCtor
-    - (for r, w that are AccRequire)
-      - cache str r
-      - nullable str msg
-- nullable TypedExpr f.expr
-- pos f.pos
-- doc f.doc
-- arr cache ClassField f.overloads
+- cache maybeExternalField
+  - cache str f.name
+  - cache Type f.type
+  - bools(3)
+    - f.isPublic
+    - f.isExtern
+    - f.isFinal
+  - arr TypeParameter f.params
+  - arr MetadataEntry f.meta
+  - enum f.kind
+    - 0 FMethod(MethNormal)
+    - 1 FMethod(Inline)
+    - 2 FMethod(Dynamic)
+    - 3 FMethod(Macro)
+    - 10-234 FVar(r, w) - index = 10 + r * 15 + w, where r or w is:
+      - 0 AccNormal
+      - 1 AccNo
+      - 2 AccNever
+      - 3 AccResolve
+      - 4 AccCall
+      - 5 AccInline
+      - 6 AccRequire(r, msg)
+      - 7 AccCtor
+      - (for r, w that are AccRequire)
+        - cache str r
+        - nullable str msg
+  - nullable TypedExpr f.expr
+  - pos f.pos
+  - doc f.doc
+  - arr ClassField f.overloads
 
 ### `EnumField(f)`
 
-- cache str f.name
-- cache Type f.type
-- pos f.pos
-- arr MetadataEntry f.meta
-- uleb128 f.index
-- doc f.doc
-- arr TypeParameter f.params
+- cache maybeExternalField
+  - cache str f.name
+  - cache Type f.type
+  - pos f.pos
+  - arr MetadataEntry f.meta
+  - uleb128 f.index
+  - doc f.doc
+  - arr TypeParameter f.params
 
 ### `BaseType(c)`
 
@@ -502,17 +513,17 @@ In case of `TLazy`, resolve, then encode result.
     - 8 KGenericBuild
   - arr ParamClassType c.interfaces
   - nullable ParamClassType c.superClass
-  - arr cache ClassField c.statics
-  - arr cache ClassField c.fields
-  - nullable cache ClassField c.constructor
+  - arr ClassField c.statics
+  - arr ClassField c.fields
+  - nullable ClassField c.constructor
   - nullable TypedExpr c.init
-  - arr cache ClassField c.overrides
+  - arr ClassField c.overrides
 
 ### `EnumType(c)`
 
 - cache maybeExternalType
   - BaseType c
-  - arr cache EnumField c.constructors.values()
+  - arr EnumField c.constructors.values()
   - arr cache str names
 
 ### `DefType(c)`
@@ -531,29 +542,29 @@ In case of `TLazy`, resolve, then encode result.
   - arr AbstractUnop c.unops
   - arr AbstractFrom c.from
   - arr AbstractTo c.to
-  - arr cache ClassField c.array
-  - nullable cache ClassField c.resolve
-  - nullable cache ClassField c.resolveWrite
+  - arr ClassField c.array
+  - nullable ClassField c.resolve
+  - nullable ClassField c.resolveWrite
 
 ### `AbstractBinop(op)`
 
 - Binop op.op
-- cache ClassField op.field
+- ClassField op.field
 
 ### `AbstractUnop(op)`
 
 - Unop op.op, op.postfix
-- cache ClassField op.field
+- ClassField op.field
 
 ### `AbstractFrom(f)`
 
 - cache Type f.t
-- nullable cache ClassField f.field
+- nullable ClassField f.field
 
 ### `AbstractTo(t)`
 
 - cache Type t.t
-- nullable cache ClassField t.field
+- nullable ClassField t.field
 
 ### `TConstant`
 
@@ -614,25 +625,25 @@ In case of `TLazy`, resolve, then encode result.
     - TypedExpr e
     - ClassType c
     - arr cache Type params
-    - cache ClassField cf
+    - ClassField cf
   - 5 TField(e, FStatic(c, cf))
     - TypedExpr e
     - ClassType c
-    - cache ClassField cf
+    - ClassField cf
   - 6 TField(e, FAnon(cf))
     - TypedExpr e
-    - cache ClassField cf
+    - ClassField cf
   - 7 TField(e, FDynamic(s))
     - TypedExpr e
     - cache str s
   - 7 TField(e, FClosure(c, cf))
     - TypedExpr e
     - nullable ParamClassType c
-    - cache ClassField cf
+    - ClassField cf
   - 8 TField(e, FEnum(e, ef))
     - TypedExpr e
     - EnumType e
-    - cache EnumField ef
+    - EnumField ef
   - 9 TTypeExpr(m)
     - cache ModuleType m
   - 10 TParenthesis(e)
@@ -702,7 +713,7 @@ In case of `TLazy`, resolve, then encode result.
     - TypedExpr e
   - 36 TEnumParameter(e, ef, index)
     - TypedExpr e
-    - cache EnumField ef
+    - EnumField ef
     - uleb128 index
   - 37 TEnumIndex(e)
     - TypedExpr e
