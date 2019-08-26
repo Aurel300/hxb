@@ -673,7 +673,7 @@ In case of `TLazy`, resolve, then encode result.
     - TFunc tfunc
   - 17 TVar(v, null) (no expr)
   - 18 TVar(v, expr) (with expr)
-    - cache.lookup TVar v
+    - cache.store TVar v
     - (if 18) TypedExpr expr
   - 19 TBlock(el)
     - arr TypedExpr el
