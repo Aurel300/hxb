@@ -1,10 +1,173 @@
 # `hxb` format
 
+- [`hxb` file format](#hxb-file-format)
+- [Primitives](#primitives)
+- [Haxe](#haxe)
+
+---
+
+## `hxb` file format
+
+A `hxb` file has the following structure:
+
+- : `"hxb1"` (magic bytes and version)
+- [Header](#header) : header chunk
+- [Chunk](#chunk)... : data chunks:
+  - [StringPool](#stringpool)
+  - [DocPool](#docpool)
+  - [TypeList](#typelist)
+  - [FieldList](#fieldlist)
+  - [TypeDeclarations](#typedeclarations)
+  - [MoudleExtra](#moduleextra)
+- [End](#end) : end chunk
+
+A `hxb` file corresponds to exactly one Haxe module (`module_def` in `type.ml`).
+
+### `Chunk`
+
+The general structure of a chunk is based on PNG chunks. See [PNG Chunks](http://www.libpng.org/pub/png/spec/1.2/PNG-Chunks.html) and [PNG Structure - Chunk naming conventions](http://www.libpng.org/pub/png/spec/1.2/PNG-Structure.html#Chunk-naming-conventions).
+
+A "critical" chunk is necessary to use the `hxb` file for AST serialisation and deserialisation purposes.
+
+A "public" chunk is specified in this document. Applications may define their own chunks which will be "private".
+
+- [u32](#u32) : size of data (not including the header or the checksum)
+- ... : 4-byte string identifier consisting of uppercase and lowercase letters only; the case of each letter indicates chunk properties:
+  - bool : case of first byte - uppercase = critical chunk, lowercase = ancillary chunk
+  - bool : case of second byte - uppercase = public chunk, lowercase = private chunk
+  - bool : case of third byte - uppercase (reserved for future use)
+  - bool : case of fourth byte - uppercase (reserved for future use)
+- (bytes) : data; specific to each chunk
+- [u32](#u32) : CRC-32 checksum 
+
+### `Header`
+
+[Chunk](#chunk) with identifier `"HHDR"` and data:
+
+- [bools](#bools)(1) config
+  - store positions
+- [Path](#path) : `m_path`
+- [str](#str) : `m_file`
+
+### `End`
+
+[Chunk](#chunk) with identifier `"HEND"` and no data.
+
+### `StringPool`
+
+[Chunk](#chunk) with identifier `"STRI"` and data:
+
+- [arr](#arr) [str](#str) : strings in pool
+
+The type [pstr](#pstr) is a (0-based) index in the array in the last-read StringPool chunk.
+
+### `DocPool`
+
+[Chunk](#chunk) with identifier `"dOCS"` and data:
+
+- [arr](#arr) [str](#str) : docstrings in pool
+
+Docstrings are stored separately from other strings in this chunk.
+
+### `TypeList`
+
+[Chunk](#chunk) with identifier `"TYPL"` and data:
+
+- [arr](#arr) [TypePath](#typepath) : external classes
+- [arr](#arr) [TypePath](#typepath) : external enums
+- [arr](#arr) [TypePath](#typepath) : external abstracts
+- [arr](#arr) [TypePath](#typepath) : external typedefs
+- [arr](#arr) [str](#str) : classes declared in this module
+- [arr](#arr) [str](#str) : enums declared in this module
+- [arr](#arr) [str](#str) : abstracts declared in this module
+- [arr](#arr) [str](#str) : typedefs declared in this module
+
+A class is referenced with a single index, which can refer to both external and internal classes. An index that is within range of the external classes array represents a reference to an external class. Otherwise, the length of the external classes array is subtracted from the index and the result is the index in the internal classes array. Enums, abstracts, and typedefs are indexed in the same way using their respective arrays.
+
+### `FieldList`
+
+[Chunk](#chunk) with identifier `"FLDL"` and data:
+
+- [arr](#arr) [str](#str) ... : an array of field names for each class, internal and external, in the last [TypeList](#typelist) chunk, in the same order
+- [arr](#arr) [str](#str) ... : an array of field names for each enum, internal and external, in the last [TypeList](#typelist) chunk, in the same order
+
+### `TypeDeclarations`
+
+[Chunk](#chunk) with identifier `"TYPE"` and data:
+
+- [ClassType](#classtype) ... : class declarations
+- [EnumType](#enumtype) ... : enum declarations
+- [AbstractType](#abstracttype) ... : abstract declarations
+- [DefType](#deftype) ... : typedef declarations
+
+All declarations are in the same order as the corresponding "* declared in this module" field of the last [TypeList](#typelist) chunk.
+
+### `ModuleExtra`
+
+(`module_def_extra` in `type.ml`)
+
+TODO: `m_id` ? ULEB128 for `m_added`, `m_mark`, or `m_processed` ?
+
+[Chunk](#chunk) with identifier `"xTRA"` and data:
+
+- [str](#str) : `m_file`
+- (16 bytes) : `m_sign`
+- [arr](#arr) : `m_display.m_inline_calls`
+  - [pos](#pos)
+  - [pos](#pos)
+- [arr](#arr) : `m_display.m_type_hints`
+  - [pos](#pos)
+  - [Type](#type)
+- [arr](#arr) [enum](#enum) : `m_check_policy`
+  - 0 `NoCheckFileTimeModification`
+  - 1 `CheckFileContentModification`
+  - 2 `NoCheckDependencies`
+  - 3 `NoCheckShadowing`
+- [f64](#f64) : `m_time`
+- [nullable](#nullable) [Path](#path) : `m_dirty.m_path`
+- [i32](#i32) : `m_added`
+- [i32](#i32) : `m_mark`
+- [arr](#arr) [Path](#path) : `m_deps.map(m -> m.m_path)`
+- [i32](#i32) : `m_processed`
+- [enum](#enum) : `m_kind`
+  - 0 `MCode`
+  - 1 `MMacro`
+  - 2 `MFake`
+  - 3 `MExtern`
+  - 4 `MImport`
+- [arr](#arr) : `m_binded_res`
+  - [str](#str) : resource name
+  - [str](#str) : resource data
+- [arr](#arr) : `m_if_feature`
+  - [str](#str) : feature
+  - [ClassRef](#classref)
+  - [ClassFieldRef](#classfieldref)
+  - [bools](#bools)(1)
+    - enabled
+- [arr](#arr) : `m_features`
+  - [str](#str) : feature
+  - [bools](#bools)(1)
+    - enabled
+
+---
+
 ## Primitives
 
 ### `u8`
 
 Unsigned 8-bit integer.
+
+### `u32`
+
+Unsigned 32-bit integer, little-endian.
+
+### `i32`
+
+Signed 32-bit integer, little-endian.
+
+### `f64`
+
+Double-precision IEEE floating-point number.
 
 ### `leb128`
 
@@ -16,13 +179,15 @@ Unsigned [LEB128](https://en.wikipedia.org/wiki/LEB128).
 
 ### `str`
 
-- uleb128 string length
-- ... string data
+- [uleb128](#uleb128) : string length
+- (bytes) : string data
+
+A `str` may be used to represent arbitrary binary data.
 
 ### `arr T`
 
-- uleb128 array length
-- ... 0 or more T
+- [uleb128](#uleb128) : array length
+- T... : 0 or more entries
 
 ### `bools(n)`
 
@@ -30,734 +195,922 @@ Unsigned [LEB128](https://en.wikipedia.org/wiki/LEB128).
 
 ### `enum`
 
-- u8 for enum case
-- ... associated data for case, if any
+- [u8](#u8) : for enum case
+- ... : associated data for case, if any
 
 ### `nullable T`
 
-- u8 present
-- (if present) T
-
-### `cache T`
-
-- uleb128 - `0` when not cached, `1+` stored index
-- (if not cached) T
-
-Special cases:
-
-- cache.store T - always stores T, so skip the index
-- cache.lookup T - never stores T, same as cache T
+- [u8](#u8) : present
+- T : (if present) data
 
 ### `delta`
 
-- leb128 - signed offset from last decoded delta
+- [leb128](#leb128) : - signed offset from last decoded delta
 
-### `pos(p)`
+The last decoded value is reset to `0` at the beginning of every chunk.
 
-No data when positions not encoded. Otherwise:
+## Haxe
 
-- delta p.min
-- leb128
-  - least significant bit: file present?
-  - remaining bits = delta p.max
-- (if file present) cache str p.file
+### `pos`
 
-### `doc`
+(`pos` in `globals.ml`)
 
-No data when docs not encoded. Otherwise:
+No data when positions not encoded, as specified in the [Header](#header) chunk. Otherwise:
 
-- nullable str doc
+- [delta](#delta) : `pmin`
+- [leb128](#leb128) :
+  - least significant bit: bool : file present?
+  - remaining bits: [delta](#delta) : `pmax`
+- (if file present) [cache](#cache) [str](#str) : `pfile`
 
-### `maybeExternalType T`
+If file is not present, it is the same as the last decoded `pos`. The first `pos` in a chunk must always have a file present.
 
-- enum
-  - 0 (same module)
-    - ... T
-  - 1 (different module)
-    - TypePath
+### `Path`
 
-### `maybeExternalField T`
+(`path` in `globals.ml`)
 
-- enum
-  - 0 (same module)
-    - ... T
-  - 1 (different module)
-    - TypePath
-    - str
+- [arr](#arr) [pstr](#pstr) : package
+- [pstr](#pstr) : name
 
-## Haxe (Expr)
+### `pstr`
 
-### `Constant`
+An index in the array in the last [StringPool](#stringpool) chunk is stored. The first element is referenced as `0`, the second as `1`, etc.
 
-- enum
-  - 0 CInt(v)
-    - str v
-  - 1 CFloat(v)
-    - str v
-  - 2 CIdent(v)
-    - cache str v
-  - 3 CRegexp(v, opt)
-    - str v
-    - str opt
-  - 4 CString(v, DoubleQuotes)
-    - str v
-  - 5 CString(v, SingleQuotes)
-    - str v
+- [uleb128](#uleb128) : string index
+
+### `ClassRef`, `EnumRef`, `AbstractRef`, `DefRef`
+
+- [uleb128](#uleb128) : index in the corresponding [TypeList](#typelist) array
+
+See [TypeList](#typelist) for indexing method.
+
+### `ClassFieldRef`, `EnumFieldRef`
+
+- [uleb128](#uleb128) : index in the corresponding [FieldList](#fieldlist) array
 
 ### `Binop`
 
-- enum
-  - 0 OpAdd
-  - 1 OpMult
-  - 2 OpDiv
-  - 3 OpSub
-  - 4 OpAssign
-  - 5 OpEq
-  - 6 OpNotEq
-  - 7 OpGt
-  - 8 OpGte
-  - 9 OpLt
-  - 10 OpLte
-  - 11 OpAnd
-  - 12 OpOr
-  - 13 OpXor
-  - 14 OpBoolAnd
-  - 15 OpBoolOr
-  - 16 OpShl
-  - 17 OpShr
-  - 18 OpUShr
-  - 19 OpMod
-  - 10 OpInterval
-  - 21 OpArrow
-  - 22 OpIn
-  - 40-62 OpAssignOp(...)
+(`binop` in `ast.ml`)
 
-### `Unop(op, postfix)`
+Compound assignment binary operators cannot be nested, hence this enum has separate cases for compound assignment operators:
 
-- enum op
-  - 0 prefix OpIncrement
-  - 1 prefix OpDecrement
-  - 2 prefix OpNot
-  - 3 prefix OpNeg
-  - 4 prefix OpNegBits
+- [enum](#enum)
+  - 0 `OpAdd`
+  - 1 `OpMult`
+  - 2 `OpDiv`
+  - 3 `OpSub`
+  - 4 `OpAssign`
+  - 5 `OpEq`
+  - 6 `OpNotEq`
+  - 7 `OpGt`
+  - 8 `OpGte`
+  - 9 `OpLt`
+  - 10 `OpLte`
+  - 11 `OpAnd`
+  - 12 `OpOr`
+  - 13 `OpXor`
+  - 14 `OpBoolAnd`
+  - 15 `OpBoolOr`
+  - 16 `OpShl`
+  - 17 `OpShr`
+  - 18 `OpUShr`
+  - 19 `OpMod`
+  - 10 `OpInterval`
+  - 21 `OpArrow`
+  - 22 `OpIn`
+  - 40-62 `OpAssignOp(...)`
+
+### `Unop`
+
+(`unop` and `unop_flag` in `ast.ml`)
+
+Unary operators are always referenced with a postfix boolean, hence this enum has separate cases for prefix and postfix operators:
+
+- [enum](#enum)
+  - 0 prefix `OpIncrement`
+  - 1 prefix `OpDecrement`
+  - 2 prefix `OpNot`
+  - 3 prefix `OpNeg`
+  - 4 prefix `OpNegBits`
   - 40-44 postfix ...
 
-### `Expr(e)`
+### `Constant`
 
-- enum ExprDef e.expr
-- pos e.pos
+(`constant` and `string_literal_kind` in `ast.ml`)
 
-### `ExprDef`
+- [enum](#enum)
+  - 0 `Int(v)`
+    - [pstr](#pstr) : `v`
+  - 1 `Float(v)`
+    - [pstr](#pstr) : `v`
+  - 2 `Ident(v)`
+    - [pstr](#pstr) : `v`
+  - 3 `Regexp(v, opt)`
+    - [pstr](#pstr) : `v`
+    - [pstr](#pstr) : `opt`
+  - 4 `String(v, SDoubleQuotes)`
+    - [pstr](#pstr) : `v`
+  - 5 `String(v, SSingleQuotes)`
+    - [pstr](#pstr) : `v`
 
-- enum
-  - 0 EConst(c)
-    - Constant c
-  - 1 EArray(e1, e2)
-    - Expr e1
-    - Expr e2
-  - 2 EBinop(op, e1, e2)
-    - Binop op
-    - Expr e1
-    - Expr e2
-  - 3 EField(e, field)
-    - Expr e
-    - str field
-  - 4 EParenthesis(e)
-    - Expr e
-  - 5 EObjectDecl(fields)
-    - arr ObjectField fields
-  - 6 EArrayDecl(values)
-    - arr Expr values
-  - 7 ECall(e, params)
-    - Expr e
-    - arr Expr params
-  - 8 ENew(t:TypePath, params)
-    - TypePath t
-    - arr Expr params
-  - 9 EUnop(op, postFix, e)
-    - Unop op, postFix
-    - Expr e
-  - 10 EVars(vars)
-    - arr Var vars
-  - 11 EFunction(FAnonymous, f)
-  - 12 EFunction(FNamed, f)
-  - 13 EFunction(FArrow, f)
-    - Function f
-    - (if 12) str name
-    - (if 12) bools(1)
-      - inlined
-  - 14 EBlock(exprs)
-    - arr Expr exprs
-  - 15 EFor(it, expr)
-    - Expr it
-    - Expr expr
-  - 16 EIf(econd, eif, null) (no else)
-  - 17 EIf(econd, eif, eelse) (with else)
-    - Expr econd
-    - Expr eif
-    - (if 17) Expr eelse
-  - 18 EWhile(econd, e, true) (normal)
-  - 19 EWhile(econd, e, false) (do-while)
-    - Expr econd
-    - Expr e
-  - 20 ESwitch(e, cases, null) (no default)
-  - 21 ESwitch(e, cases, edef) (default case)
-    - Expr e
-    - arr Case cases
-    - (if 21) Expr edef
-  - 22 ETry(e, `[catch]`) (single catch)
-    - Expr e
-    - Catch catch
-  - 23 ETry(e, catches) (zero or multiple catches)
-    - Expr e
-    - arr Catch catches
-  - 24 EReturn(null) (void return)
-  - 25 EReturn(e) (value return)
-    - Expr e
-  - 26 EBreak
-  - 27 EContinue
-  - 28 EUntyped(e)
-    - Expr e
-  - 29 EThrow(e)
-    - Expr e
-  - 30 ECast(e, null) (unsafe cast)
-  - 31 ECast(e, t) (safe cast)
-    - Expr e
-    - (if 31) ComplexType t
-  - 32 EDisplay(e, displayKind)
-    - Expr e
-    - DisplayKind displayKind
-  - 33 EDisplayNew(t)
-    - TypePath t
-  - 34 ETernary(econd, eif, eelse)
-    - Expr econd
-    - Expr eif
-    - Expr eelse
-  - 35 ECheckType(e, t)
-    - Expr e
-    - TypePath t
-  - 36 EMeta(s, e)
-    - MetadataEntry s
-    - Expr e
+### `TypePath`
 
-### `Case(c)`
+(`type_path` in `ast.ml`)
 
-- arr Expr c.values
-- nullable Expr c.guard
-- nullable Expr c.expr
+- [arr](#arr) [pstr](#pstr) : `tpackage`
+- [pstr](#pstr) : `tname`
+- [arr](#arr) [TypeParam](#TypeParam) : `tparams`
+- [nullable](#nullable) [pstr](#pstr) : `tsub`
 
-### `Var(v)`
+### `PlacedTypePath`
 
-- cache str v.name
-- nullable ComplexType v.type
-- nullable Expr v.expr
-- bools(1)
-  - v.isFinal
+(`placed_type_path` in `ast.ml`)
 
-### `Catch(c)`
-
-- cache str c.name
-- ComplexType c.type
-- Expr c.expr
-
-### `ObjectField(f)`
-
-- cache str f.name
-- Expr f.expr
-- bools(1)
-  - f.quotes == Quoted
-
-### `DisplayKind`
-
-- enum
-  - 0 DKCall
-  - 1 DKDot
-  - 2 DKStructure
-  - 3 DKMarked
-  - 4 DKPatern(false)
-  - 5 DKPatern(true)
-
-### `ComplexType`
-
-- enum
-  - 0 TPath(p)
-    - TypePath p
-  - 1 TFunction(args, ret)
-    - arr ComplexType args
-    - ComplexType ret
-  - 2 TAnonymous(fields)
-    - arr Field fields
-  - 3 TParent(t)
-    - ComplexType t
-  - 4 TExtend(p, fields)
-    - arr TypePath p
-    - arr Field fields
-  - 5 TOptional(t)
-    - TypePath t
-  - 6 TNamed(n, t)
-    - str n
-    - TypePath t
-  - 7 TIntersection(tl)
-    - arr ComplexType tl
-
-### `TypePath(p)`
-
-- arr cache str p.pack
-- cache str p.name
-- nullable cache str p.sub
-- arr TypeParam p.params
+- [TypePath](#typepath) : type path
+- [pos](#pos) : position
 
 ### `TypeParam`
 
-- enum
-  - 0 TPType(t)
-    - ComplexType t
-  - 1 TPExpr(e)
-    - Expr e
+(`type_param_or_const` in `ast.ml`)
 
-### `TypeParamDecl(t)`
+- [enum](#enum)
+  - 0 `TPType(t)`
+    - [TypeHint](#typehint) : `t`
+  - 1 `TPExpr(e)`
+    - [Expr](#expr) : `e`
 
-- cache str t.name
-- nullable arr ComplexType t.constraints
-- nullable arr cache TypeParamDecl t.params
-- nullable arr MetadataEntry t.meta
+### `ComplexType`
 
-### `Function(f)`
+(`complex_type` in `ast.ml`)
 
-- arr FunctionArg f.args
-- nullable ComplexType f.ret
-- nullable Expr f.expr
-- nullable arr cache TypeParamDecl f.params
+- [enum](#enum)
+  - 0 `CTPath(p)`
+    - [TypePath](#typepath) `p`
+  - 1 `CTFunction(args, ret)`
+    - [arr](#arr) [TypeHint](#typehint) `args`
+    - [TypeHint](#typehint) `ret`
+  - 2 `CTAnonymous(fields)`
+    - [arr](#arr) [Field](#field) `fields`
+  - 3 `CTParent(t)`
+    - [TypeHint](#typehint) `t`
+  - 4 `CTExtend(p, fields)`
+    - [arr](#arr) [PlacedTypePath](#placedtypepath) `p`
+    - [arr](#arr) [Field](#field) `fields`
+  - 5 `CTOptional(t)`
+    - [TypeHint](#typehint) `t`
+  - 6 `CTNamed(n, t)`
+    - [PlacedName](#placedname) `n`
+    - [TypeHint](#typehint) `n`
+  - 7 `CTIntersection(tl)`
+    - [arr](#arr) [TypeHint](#typehint) `tl`
 
-### `FunctionArg(a)`
+### `TypeHint`
 
-- cache str a.name
-- bools(1)
-  - a.opt
-- nullable ComplexType a.type
-- nullable Expr a.value
-- nullable arr MetadataEntry a.meta
+(`type_hint` in `ast.ml`)
 
-### `MetadataEntry(e)`
+- [ComplexType](#complextype) : complex type
+- [pos](#pos) : position
 
-- str e.name
-- nullable arr Expr e.params
-- pos e.pos
+### `Function`
 
-### `Field(f)`
+(`func` in `ast.ml`)
 
-- cache str f.name
-- doc f.doc
-- arr Access f.access
-- enum f.kind
-  - 0 FVar(t, e)
-    - nullable ComplexType t
-    - nullable Expr e
-  - 1 FFun(f)
-    - Function f
-  - 2 FProp(get, set, t, e)
-    - PropAccess get
-    - PropAccess set
-    - nullable ComplexType t
-    - nullable Expr e
-- pos f.pos
-- nullable arr MetadataEntry f.meta
+- [arr](#arr) [TypeParamDecl](#typeparamdecl) : `f_params`
+- [arr](#arr) [FunctionArg](#functionarg) : `f_args`
+- [TypeHint](#typehint) : `f_type`
+- [Expr](#expr) : `f_expr`
 
-### `PropAccess`
+### `FunctionArg`
 
-- enum
-  - 0 get
-  - 1 set
-  - 2 null
-  - 3 default
-  - 4 never
+(tuple in `func` in `ast.ml`)
 
-### `Access`
+- [PlacedName](#placedname) : argument name
+- [bools](#bools)(1)
+  - optional
+- [nullable](#nullable) [TypeHint](#typehint) : argument type
+- [nullable](#nullable) [Expr](#expr) : default value
+- [arr](#arr) [MetadataEntry](#metadataentry) : metadata
 
-- enum
-  - 0 APublic
-  - 1 APrivate
-  - 2 AStatic
-  - 3 AOverride
-  - 4 ADynamic
-  - 5 AInline
-  - 6 AMacro
-  - 7 AFinal
-  - 8 AExtern
+### `PlacedName`
 
-### `FieldType`
+(`placed_name` in `ast.ml`)
 
-## Haxe (Type)
+- [pstr](#pstr) : name
+- [pos](#pos) : position
+
+### `ExprDef`
+
+(`expr_def`, `while_flag`, `function_kind`, and `display_kind` in `ast.ml`)
+
+- [enum](#enum)
+  - 0 `EConst(c)`
+    - [Constant](#constant) : `c`
+  - 1 `EArray(e1, e2)`
+    - [Expr](#expr) : `e1`
+    - [Expr](#expr) : `e2`
+  - 2 `EBinop(op, e1, e2)`
+    - [Binop](#binop) : `op`
+    - [Expr](#expr) : `e1`
+    - [Expr](#expr) : `e2`
+  - 3 `EField(e, field)`
+    - [Expr](#expr) : `e`
+    - [pstr](#pstr) : `field`
+  - 4 `EParenthesis(e)`
+    - [Expr](#expr) : `e`
+  - 5 `EObjectDecl(fields)`
+    - [arr](#arr) [ObjectField](#objectfield) : `fields`
+  - 6 `EArrayDecl(values)`
+    - [arr](#arr) [Expr](#expr) : `values`
+  - 7 `ECall(e, params)`
+    - [Expr](#expr) : `e`
+    - [arr](#arr) [Expr](#expr) : `params`
+  - 8 `ENew(t, params)`
+    - [PlacedTypePath](#placedtypepath) : `t`
+    - [arr](#arr) [Expr](#expr) : `params`
+  - 9 `EUnop(op, postfix, e)`
+    - [Unop](#unop) : `op`, `postfix`
+    - [Expr](#expr) : `e`
+  - 10 `EVars(vars)`
+    - [arr](#arr) [Var](#var) : `vars`
+  - 11 `EFunction(FKAnonymous, f)`,
+  - 12 `EFunction(FKNamed(name, inlined), f)`,
+  - 13 `EFunction(FKArrow, f)`
+    - [Function](#function) : `f`
+    - (if 12) [pstr](#pstr) : `name`
+    - (if 12) [bools](#bools)(1)
+      - `inlined`
+  - 14 `EBlock(exprs)`
+    - [arr](#arr) [Expr](#expr) : `exprs`
+  - 15 `EFor(it, expr)`
+    - [Expr](#expr) : `it`
+    - [Expr](#expr) : `expr`
+  - 16 `EIf(econd, eif, null)` (no else),
+  - 17 `EIf(econd, eif, eelse)` (with else)
+    - [Expr](#expr) : `econd`
+    - [Expr](#expr) : `eif`
+    - (if 17) [Expr](#expr) : `eelse`
+  - 18 `EWhile(econd, e, NormalWhile)`,
+  - 19 `EWhile(econd, e, DoWhile)`
+    - [Expr](#expr) : `econd`
+    - [Expr](#expr) : `e`
+  - 20 `ESwitch(e, cases, null)` (no default),
+  - 21 `ESwitch(e, cases, pos)` (empty default with position),
+  - 22 `ESwitch(e, cases, edef)` (default case)
+    - [Expr](#expr) : `e`
+    - [arr](#arr) [Case](#case) : `cases`
+    - (if 21) [pos](#pos) : `pos`
+    - (if 22) [Expr](#expr) : `edef`
+  - 23 `ETry(e, [catch])` (single catch)
+    - [Expr](#expr) : `e`
+    - [Catch](#catch) : `catch`
+  - 24 `ETry(e, catches)` (zero or multiple catches)
+    - [Expr](#expr) : `e`
+    - [arr](#arr) [Catch](#catch) : `catches`
+  - 25 `EReturn(null)` (void return)
+  - 26 `EReturn(e)` (expression return)
+    - [Expr](#expr) : `e`
+  - 27 `EBreak`
+  - 28 `EContinue`
+  - 29 `EUntyped(e)`
+    - [Expr](#expr) : `e`
+  - 30 `EThrow(e)`
+    - [Expr](#expr) : `e`
+  - 31 `ECast(e, null)` (unsafe cast),
+  - 32 `ECast(e, t)` (safe cast)
+    - [Expr](#expr) : `e`
+    - (if 32) [TypeHint](#typehint) : `t`
+  - 33 `EDisplay(e, DKCall)`,
+  - 34 `EDisplay(e, DKDot)`,
+  - 35 `EDisplay(e, DKStructure)`,
+  - 36 `EDisplay(e, DKMarked)`,
+  - 37 `EDisplay(e, DKPatern(false))`,
+  - 38 `EDisplay(e, DKPatern(true))`
+    - [Expr](#expr) : `e`
+  - 39 `EDisplayNew(t)`
+    - [PlacedTypePath](#placedtypepath) : `t`
+  - 40 `ETernary(econd, eif, eelse)`
+    - [Expr](#expr) : `econd`
+    - [Expr](#expr) : `eif`
+    - [Expr](#expr) : `eelse`
+  - 41 `ECheckType(e, t)`
+    - [Expr](#expr) : `e`
+    - [TypeHint](#typehint) : `t`
+  - 42 `EMeta(s, e)`
+    - [MetadataEntry](#metadataentry) : `s`
+    - [Expr](#expr) : `e`
+
+### `ObjectField`
+
+(tuple in `expr_def.EObjectDecl` in `ast.ml`)
+
+- [pstr](#pstr) : field name
+- [pos](#pos) : position of name
+- [bools](#bools)(1)
+  - quoted
+- [Expr](#expr) : expression
+
+### `Var`
+
+(tuple in `expr_def.EVars` in `ast.ml`)
+
+- [PlacedName](#placedname) : variable name
+- [bools](#bools)(1)
+  - final
+- [nullable](#nullable) [TypeHint](#typehint) : variable type
+- [nullable](#nullable) [Expr](#expr) : expression
+
+### `Case`
+
+(tuple in `expr_def.ESwitch` in `ast.ml`)
+
+- [arr](#arr) [Expr](#expr) : matched values
+- [nullable](#nullable) [Expr](#expr) : guard
+- [nullable](#nullable) [Expr](#expr) : expression
+- [pos](#pos) : position
+
+### `Catch`
+
+(tuple in `expr_def.ETry` in `ast.ml`)
+
+- [PlacedName](#placedname) : exception variable name
+- [TypeHint](#typehint) : exception type
+- [Expr](#expr) : catch expression
+- [pos](#pos) : position of variable
+
+### `Expr`
+
+(`expr` in `ast.ml`)
+
+- [ExprDef](#ExprDef) : expression kind
+- [pos](#pos) : position
+
+### `TypeParamDecl`
+
+(`type_param` in `ast.ml`)
+
+TODO: recursion?
+
+- [pstr](#pstr) : `tp_name`
+- [arr](#arr) [TypeParamDecl](#typeparamdecl) : `tp_params`
+- [nullable](#nullable) [TypeHint](#typehint) : `tp_constraints`
+- [arr](#arr) [MetadataEntry](#metadataentry) : `tp_meta`
+
+### `doc`
+
+(`documentation` in `ast.ml`)
+
+Any occurence of `doc` may be `null` (when no docstring is present) - absence is indicated with a value of `0`. Otherwise, an index in the array in the last-read [DocPool](#docpool) chunk is stored, offset by one, i.e. the first element is referenced as `1`, the second as `2`, etc.
+
+- [uleb128](#uleb128) : offset doc index or `0`
+
+If a DocPool chunk is not present, documentation is omitted in the `hxb` file. Decoded docstrings should become `null`.
+
+### `MetadataEntry`
+
+(`metadata_entry` in `ast.ml`)
+
+TODO: index well-known metas in an enum?
+
+- [pstr](#pstr) : name
+- [arr](#arr) [Expr](#expr) : arguments
+- [pos](#pos) : position
+
+### `PlacedAccess`
+
+(`placed_access` and `access` in `ast.ml`)
+
+- [enum](#enum) : access modifier
+  - 0 `APublic`
+  - 1 `APrivate`
+  - 2 `AStatic`
+  - 3 `AOverride`
+  - 4 `ADynamic`
+  - 5 `AInline`
+  - 6 `AMacro`
+  - 7 `AFinal`
+  - 8 `AExtern`
+- [pos](#pos) : position
+
+### `Field`
+
+(`class_field` and `class_field_kind` in `ast.ml`)
+
+- [pstr](#pstr) : `cff_name`
+- [doc](#doc) : `cff_doc`
+- [pos](#pos) : `cff_pos`
+- [arr](#arr) [MetadataEntry](#metadataentry) : `cff_meta`
+- [arr](#arr) [PlacedAccess](#placedaccess) : `cff_access`
+- [enum](#enum) : `cff_kind`
+  - 0 `FVar(t, e)`
+    - [nullable](#nullable) [TypeHint](#typehint) : `t`
+    - [nullable](#nullable) [Expr](#expr) : `e`
+  - 1 `FFun(f)`
+    - [Function](#function) : `f`
+  - 2 `FProp(get, get, t, e)`,
+  - 3 `FProp(get, set, t, e)`,
+  - 4 `FProp(get, null, t, e)`,
+  - 5 `FProp(get, default, t, e)`,
+  - 6 `FProp(get, never, t, e)`,
+  - 7 `FProp(set, get, t, e)`,
+  - 8 `FProp(set, set, t, e)`,
+  - 9 `FProp(set, null, t, e)`,
+  - 10 `FProp(set, default, t, e)`,
+  - 11 `FProp(set, never, t, e)`,
+  - 12 `FProp(null, get, t, e)`,
+  - 13 `FProp(null, set, t, e)`,
+  - 14 `FProp(null, null, t, e)`,
+  - 15 `FProp(null, default, t, e)`,
+  - 16 `FProp(null, never, t, e)`,
+  - 17 `FProp(default, get, t, e)`,
+  - 18 `FProp(default, set, t, e)`,
+  - 19 `FProp(default, null, t, e)`,
+  - 20 `FProp(default, default, t, e)`,
+  - 21 `FProp(default, never, t, e)`,
+  - 22 `FProp(never, get, t, e)`,
+  - 23 `FProp(never, set, t, e)`,
+  - 24 `FProp(never, null, t, e)`,
+  - 25 `FProp(never, default, t, e)`,
+  - 26 `FProp(never, never, t, e)`
+    - [pos](#pos) : position of read access specifier
+    - [pos](#pos) : position of write access specifier
+    - [nullable](#nullable) [TypeHint](#typehint) : `t`
+    - [nullable](#nullable) [Expr](#expr) : `e`
 
 ### `Type`
 
+(`t` and `tsignature` in `type.ml`)
+
 In case of `TLazy`, resolve, then encode result.
 
-- enum
-  - 0 TMono(null) (unbound monomorph)
-  - 1 TMono(t) (bound monomorph)
-    - cache Type t
-  - 2 TEnum(t, params)
-    - EnumType t
-    - arr cache Type params
-  - 3 TInst(t, params)
-    - ClassType t
-    - arr cache Type params
-  - 4 TType(t, params)
-    - DefType t
-    - arr cache Type params
-  - 5 TFun(args, ret)
-    - arr FunctionArg args
-    - cache Type ret
-  - 6 TAnonymous(anon)
-    - cache AnonType anon
-  - 7 TDynamic(type)
-    - nullable cache Type type
-  - 8 TAbstract(t, params)
-    - AbstractType t
-    - arr cache Type params
+- [enum](#enum)
+  - 0 `TMono(null)` (unbound monomorph)
+  - 1 `TMono(t)` (bound monomorph)
+    - [Type](#type) : `t`
+  - 2 `TEnum(t, [])` (no params),
+  - 3 `TEnum(t, params)` (one or more params)
+    - [EnumRef](#enumref) : `t`
+    - (if 3) [arr](#arr) [Type](#type) : `params`
+  - 4 `TInst(t, [])` (no params),
+  - 5 `TInst(t, params)` (one or more params)
+    - [ClassRef](#classref) : `t`
+    - (if 5) [arr](#arr) [Type](#type) : `params`
+  - 6 `TType(t, [])` (no params),
+  - 7 `TType(t, params)` (one or more params)
+    - [DefRef](#defref) : `t`
+    - (if 7) [arr](#arr) [Type](#type) : `params`
+  - 8 `TFun(args, ret)`
+    - [arr](#arr) [TFunArg](#tfunarg) : `args`
+    - [Type](#type) : `ret`
+  - 9 `TAnon(anon)`
+    - [AnonType](#anontype) : `anon`
+  - 10 `TDynamic(...)` (recursive `TDynamic`)
+  - 11 `TDynamic(t)`
+    - [Type](#type) : `type`
+  - 12 `TAbstract(t, [])` (no params),
+  - 13 `TAbstract(t, params)` (one or more params)
+    - [AbstractRef](#abstractref) : `t`
+    - (if 13) [arr](#arr) [Type](#type) : `params`
 
-### `AnonType(t)`
+### `TFunArg`
 
-- arr ClassField t.fields
-- enum t.status
-  - 0 AClosed
-  - 1 AOpened
-  - 2 AConst
-  - 3 AExtend(tl)
-    - arr cache Type tl
-  - 4 AClassStatics(t)
-    - ClassType t
-  - 5 AEnumStatics(t)
-    - EnumType t
-  - 6 AAbstractStatics(t)
-    - AbstractType t
+(tuple in `tsignature` in `type.ml`)
 
-### `TypeParameter(p)`
+- [pstr](#pstr) : argument name
+- [bools](#bools)(1)
+  - optional
+- [Type](#type) : type
 
-- cache str p.name
-- cache Type p.type
+### `TypeParams`
 
-### `ClassField(f)`
+(`type_params` in `type.ml`)
 
-- cache maybeExternalField
-  - cache str f.name
-  - cache Type f.type
-  - bools(3)
-    - f.isPublic
-    - f.isExtern
-    - f.isFinal
-  - arr TypeParameter f.params
-  - arr MetadataEntry f.meta
-  - enum f.kind
-    - 0 FMethod(MethNormal)
-    - 1 FMethod(Inline)
-    - 2 FMethod(Dynamic)
-    - 3 FMethod(Macro)
-    - 10-234 FVar(r, w) - index = 10 + r * 15 + w, where r or w is:
-      - 0 AccNormal
-      - 1 AccNo
-      - 2 AccNever
-      - 3 AccResolve
-      - 4 AccCall
-      - 5 AccInline
-      - 6 AccRequire(r, msg)
-      - 7 AccCtor
-      - (for r, w that are AccRequire)
-        - cache str r
-        - nullable str msg
-  - nullable TypedExpr f.expr
-  - pos f.pos
-  - doc f.doc
-  - arr ClassField f.overloads
-
-### `EnumField(f)`
-
-- cache maybeExternalField
-  - cache str f.name
-  - cache Type f.type
-  - pos f.pos
-  - arr MetadataEntry f.meta
-  - uleb128 f.index
-  - doc f.doc
-  - arr TypeParameter f.params
-
-### `BaseType(c)`
-
-- pos c.pos
-- cache str c.name
-- cache str c.module
-- cache str c.pack (after joining on ".")
-- bools(2)
-  - c.isPrivate
-  - c.isExtern
-- arr TypeParameter c.params
-- arr MetadataEntry c.meta
-- doc c.doc
-
-### `ClassType(c)`
-
-- cache maybeExternalType
-  - BaseType c
-  - bools(2)
-    - c.isFinal
-    - c.isInterface
-  - enum c.kind
-    - 0 KNormal
-    - 1 KTypeParameter(constraints)
-      - arr cache Type constraints
-    - 2 KExtension(cl, params), 5 KGenericInstance(cl, params):
-      - ClassType cl
-      - arr cache Type params
-    - 3 KExpr(e)
-      - Expr e
-    - 4 KGeneric
-    - 6 KMacroType
-    - 7 KAbstractImpl(a)
-      - AbstractType a
-    - 8 KGenericBuild
-  - arr ParamClassType c.interfaces
-  - nullable ParamClassType c.superClass
-  - arr ClassField c.statics
-  - arr ClassField c.fields
-  - nullable ClassField c.constructor
-  - nullable TypedExpr c.init
-  - arr ClassField c.overrides
-
-### `EnumType(c)`
-
-- cache maybeExternalType
-  - BaseType c
-  - arr EnumField c.constructors.values()
-  - arr cache str names
-
-### `DefType(c)`
-
-- cache maybeExternalType
-  - BaseType c
-  - cache Type c.type
-
-### `AbstractType(c)`
-
-- cache maybeExternalType
-  - BaseType c
-  - cache Type c.type
-  - nullable ClassType c.impl
-  - arr AbstractBinop c.binops
-  - arr AbstractUnop c.unops
-  - arr AbstractFrom c.from
-  - arr AbstractTo c.to
-  - arr ClassField c.array
-  - nullable ClassField c.resolve
-  - nullable ClassField c.resolveWrite
-
-### `AbstractBinop(op)`
-
-- Binop op.op
-- ClassField op.field
-
-### `AbstractUnop(op)`
-
-- Unop op.op, op.postfix
-- ClassField op.field
-
-### `AbstractFrom(f)`
-
-- cache Type f.t
-- nullable ClassField f.field
-
-### `AbstractTo(t)`
-
-- cache Type t.t
-- nullable ClassField t.field
+- [arr](#arr)
+  - [pstr](#pstr)
+  - [Type](#type)
 
 ### `TConstant`
 
-- enum
-  - 0 TInt(i)
-    - leb128 i
-  - 1 TFloat(s)
-    - str s
-  - 2 TString(s)
-    - str s
-  - 3 TBool(false)
-  - 4 TBool(true)
-  - 5 TNull
-  - 6 TThis
-  - 7 TSuper
+(`tconstant` in `type.ml`)
 
-### `TVar(v)`
+- [enum](#enum)
+  - 0 `TInt(i)`
+    - [leb128](#leb128) : `i`
+  - 1 `TFloat(s)`
+    - [pstr](#pstr) : `s`
+  - 2 `TString(s)`
+    - [pstr](#pstr) : `s`
+  - 3 `TBool(false)`
+  - 4 `TBool(true)`
+  - 5 `TNull`
+  - 6 `TThis`
+  - 7 `TSuper`
 
-- leb128 v.id
-- cache str v.name
-- cache Type v.t
-- bools(1)
-  - v.capture
-- nullable arr TVarExtra v.extra
-- nullable arr MetadataEntry v.meta
+### `TVarExtra`
 
-### `TVarExtra(e)`
+(`tvar_extra` in `type.ml`)
 
-- arr TypeParameter e.params
-- nullable TypedExpr e.expr
+- [TypeParams](#typeparams)
+- [nullable](#nullable) [TypedExpr](#typedexpr)
 
-### `TFunc(f)`
+### `TVar`
 
-- arr TFuncArg f.args
-- cache Type f.t
-- TypedExpr f.expr
+(`tvar`, `tvar_origin`, and `tvar_kind` in `type.ml`)
 
-### `TFuncArg(a)`
+- [leb128](#leb128) : `v_id`
+- [pstr](#pstr) : `v_name`
+- [Type](#type) : `v_type`
+- [enum](#enum) : `v_kind`
+  - 0 `VGenerated`
+  - 1 `VInlined`
+  - 2 `VInlinedConstructorVariable`
+  - 3 `VExtractorVariable`
+  - 4 `VUser(TVOLocalVariable)`
+  - 5 `VUser(TVOArgument)`
+  - 6 `VUser(TVOForVariable)`
+  - 7 `VUser(TVOPatternVariable)`
+  - 8 `VUser(TVOCatchVariable)`
+  - 9 `VUser(TVOLocalFunction)`
+- [bools](#bools)(2)
+  - `v_capture`
+  - `v_final`
+- [nullable](#nullable) [TVarExtra](#tvarextra) : `v_extra`
+- [arr](#arr) [MetadataEntry](#metadataentry) : `v_meta`
 
-- cache.store TVar a.v
-- nullable TypedExpr a.value
+### `TFunc`
+
+(`tfunc` in `type.ml`)
+
+- [arr](#arr) [TFuncArg](#tfuncarg) : `tf_args`
+- [Type](#type) : `tf_type`
+- [TypedExpr](#typedexpr) : `tf_expr`
+
+### `TFuncArg`
+
+(tuple in `tfunc` in `type.ml`)
+
+- [TVar](#tvar) : argument variable
+- [nullable](#nullable) [TypedExpr](#typedexpr) : default value
+
+### `AnonType`
+
+(`tanon` and `anon_status` in `type.ml`)
+
+TODO: references, fields?
+
+- ... `a_fields`
+- [enum](#enum) : `a_status`
+  - 0 `AClosed`
+  - 1 `AOpened`
+  - 2 `AConst`
+  - 3 `AExtend(tl)`
+    - [Type](#type) : `tl`
+  - 4 `AClassStatics(t)`
+    - [TClass](#tclass) : `t`
+  - 5 `AEnumStatics(t)`
+    - [TEnum](#tenum) : `t`
+  - 6 `AAbstractStatics(t)`
+    - [TAbstract](#tabstract) : `t`
 
 ### `TypedExprDef`
 
-- enum
-  - 0 TConst(c)
-    - TConstant c
-  - 1 TLocal(v)
-    - cache.lookup TVar v
-  - 2 TArray(e1, e2)
-    - TypedExpr e1
-    - TypedExpr e2
-  - 3 TBinop(op, e1, e2)
-    - Binop op
-    - TypedExpr e1
-    - TypedExpr e2
-  - 4 TField(e, FInstance(c, params, cf))
-    - TypedExpr e
-    - ClassType c
-    - arr cache Type params
-    - ClassField cf
-  - 5 TField(e, FStatic(c, cf))
-    - TypedExpr e
-    - ClassType c
-    - ClassField cf
-  - 6 TField(e, FAnon(cf))
-    - TypedExpr e
-    - ClassField cf
-  - 7 TField(e, FDynamic(s))
-    - TypedExpr e
-    - cache str s
-  - 7 TField(e, FClosure(c, cf))
-    - TypedExpr e
-    - nullable ParamClassType c
-    - ClassField cf
-  - 8 TField(e, FEnum(e, ef))
-    - TypedExpr e
-    - EnumType e
-    - EnumField ef
-  - 9 TTypeExpr(m)
-    - cache ModuleType m
-  - 10 TParenthesis(e)
-    - TypedExpr e
-  - 11 TObjectDecl(fields)
-    - arr fields
-      - cache str name
-      - TypedExpr expr
-  - 12 TArrayDecl(el)
-    - arr TypedExpr el
-  - 13 TCall(e, el)
-    - TypedExpr e
-    - arr TypedExpr el
-  - 14 TNew(c, params, el)
-    - ClassType c
-    - arr cache Type params
-    - arr TypedExpr el
-  - 15 TUnop(op, postFix, e)
-    - Unop op, postFix
-    - TypedExpr e
-  - 16 TFunction(tfunc)
-    - TFunc tfunc
-  - 17 TVar(v, null) (no expr)
-  - 18 TVar(v, expr) (with expr)
-    - cache.store TVar v
-    - (if 18) TypedExpr expr
-  - 19 TBlock(el)
-    - arr TypedExpr el
-  - 20 TFor(v, e1, e2)
-    - cache.store TVar v
-    - TypedExpr e1
-    - TypedExpr e2
-  - 21 TIf(econd, eif, null) (no else)
-  - 22 TIf(econd, eif, eelse) (with else)
-    - TypedExpr econd
-    - TypedExpr eif
-    - (if 22) TypedExpr eelse
-  - 23 TWhile(econd, e, true) (normal while)
-  - 24 TWhile(econd, e, false) (do-while)
-    - TypedExpr econd
-    - TypedExpr e
-  - 25 TSwitch(e, cases, null) (no default)
-  - 26 TSwitch(e, cases, edef) (default case)
-    - TypedExpr e
-    - arr cases
-      - arr TypedExpr values
-      - TypedExpr expr
-    - (if 26) TypedExpr edef
-  - 27 TTry(e, catches)
-    - TypedExpr e
-    - arr catches
-      - cache.store TVar v
-      - TypedExpr expr
-  - 28 TReturn(null) (void return)
-  - 29 TReturn(e) (value return)
-    - TypedExpr e
-  - 30 TBreak
-  - 31 TContinue
-  - 32 TThrow(e)
-    - TypedExpr e
-  - 33 TCast(e, null) (unsafe cast)
-  - 34 TCast(e, m) (safe cast)
-    - TypedExpr e
-    - (if 34) cache ModuleType m
-  - 35 TMeta(m, e)
-    - MetadataEntry m
-    - TypedExpr e
-  - 36 TEnumParameter(e, ef, index)
-    - TypedExpr e
-    - EnumField ef
-    - uleb128 index
-  - 37 TEnumIndex(e)
-    - TypedExpr e
-  - 38 TIdent(s)
-    - cache str s
+(`texpr_expr` and `tfield_access` in `type.ml`)
+
+- [enum](#enum)
+  - 0 `TConst(c)`
+    - [TConstant](#tconstant) : `c`
+  - 1 `TLocal(v)`
+    - [TVarRef](#tvarref) : `v`
+  - 2 `TArray(e1, e2)`
+    - [TypedExpr](#typedexpr) : `e1`
+    - [TypedExpr](#typedexpr) : `e2`
+  - 3 `TBinop(op, e1, e2)`
+    - [Binop](#binop) : `op`
+    - [TypedExpr](#typedexpr) : `e1`
+    - [TypedExpr](#typedexpr) : `e2`
+  - 4 `TField(e, FInstance(c, params, cf))`
+    - [TypedExpr](#typedexpr) : `e`
+    - [ClassRef](#classref) : `c`
+    - [arr](#arr) [Type](#type) : `params`
+    - [ClassFieldRef](#classfieldref) : `cf`
+  - 5 `TField(e, FStatic(c, cf))`
+    - [TypedExpr](#typedexpr) : `e`
+    - [ClassRef](#classref) : `c`
+    - [ClassFieldRef](#classfieldref) : `cf`
+  - 6 `TField(e, FAnon(cf))`
+    - [TypedExpr](#typedexpr) : `e`
+    - ... TODO: reference field?
+  - 7 `TField(e, FDynamic(s))`
+    - [TypedExpr](#typedexpr) : `e`
+    - [pstr](#pstr) : `s`
+  - 8 `TField(e, FClosure(null, null, cf))` (no class, i.e. TAnon)
+    - [TypedExpr](#typedexpr) : `e`
+    - ... TODO: reference field?
+  - 9 `TField(e, FClosure(c, params, cf))`
+    - [TypedExpr](#typedexpr) : `e`
+    - [ClassRef](#classref) : `c`
+    - [arr](#arr) [Type](#type) : `params`
+    - [ClassFieldRef](#classfieldref) : `cf`
+  - 10 `TField(e, FEnum(e, ef))`
+    - [TypedExpr](#typedexpr) : `e`
+    - [EnumRef](#enumref) : `e`
+    - [EnumFieldRef](#enumfieldref) : `ef`
+  - 11 `TTypeExpr(m)` (class)
+    - [ClassRef](#classref) : `m`
+  - 12 `TTypeExpr(m)` (enum)
+    - [EnumRef](#enumref) : `m`
+  - 13 `TTypeExpr(m)` (typedef)
+    - [DefRef](#defref) : `m`
+  - 14 `TTypeExpr(m)` (abstract)
+    - [AbstractRef](#abstractref) : `m`
+  - 15 `TParenthesis(e)`
+    - [TypedExpr](#typedexpr) : `e`
+  - 16 `TObjectDecl(fields)`
+    - [arr](#arr) [TObjectField](#tobjectfield) : `fields`
+  - 17 `TArrayDecl(el)`
+    - [arr](#arr) [TypedExpr](#typedexpr) : `el`
+  - 18 `TCall(e, el)`
+    - [TypedExpr](#typedexpr) : `e`
+    - [arr](#arr) [TypedExpr](#typedexpr) : `el`
+  - 19 `TNew(c, params, el)`
+    - [ClassRef](#classref) : `c`
+    - [arr](#arr) [Type](#type) : `params`
+    - [arr](#arr) [TypedExpr](#typedexpr) : `el`
+  - 20 `TUnop(op, postfix, e)`
+    - [Unop](#unop) : `op`, `postfix`
+    - [TypedExpr](#typedexpr) : `e`
+  - 21 `TFunction(tfunc)`
+    - [TFunc](#tfunc) : `tfunc`
+  - 22 `TVar(v, null)` (no expr),
+  - 23 `TVar(v, expr)` (with expr)
+    - [TVar](#tvar) : `v`
+    - (if 23) [TypedExpr](#typedexpr) : `expr`
+  - 24 `TBlock(el)`
+    - [arr](#arr) [TypedExpr](#typedexpr) : `el`
+  - 25 `TFor(v, e1, e2)`
+    - [TVar](#tvar) : `v`
+    - [TypedExpr](#typedexpr) : `e1`
+    - [TypedExpr](#typedexpr) : `e2`
+  - 26 `TIf(econd, eif, null)` (no else),
+  - 27 `TIf(econd, eif, eelse)` (with else)
+    - [TypedExpr](#typedexpr) : `econd`
+    - [TypedExpr](#typedexpr) : `eif`
+    - (if 27) [TypedExpr](#typedexpr) : `eelse`
+  - 28 `TWhile(econd, e, NormalWhile)`,
+  - 29 `TWhile(econd, e, DoWhile)`
+    - [TypedExpr](#typedexpr) : `econd`
+    - [TypedExpr](#typedexpr) : `e`
+  - 30 `TSwitch(e, cases, null)` (no default),
+  - 31 `TSwitch(e, cases, edef)` (default case)
+    - [TypedExpr](#typedexpr) : `e`
+    - [arr](#arr) [TCase](#tcase) : `cases`
+    - (if 31) [TypedExpr](#typedexpr) : `edef`
+  - 32 `TTry(e, [catch])` (one catch)
+    - [TypedExpr](#typedexpr) : `e`
+    - [TCatch](#tcatch) : `catch`
+  - 33 `TTry(e, catches)` (zero or multiple catches)
+    - [TypedExpr](#typedexpr) : `e`
+    - [arr](#arr) [TCatch](#tcatch) : `catches`
+  - 34 `TReturn(null)` (void return)
+  - 35 `TReturn(e)` (expression return)
+    - [TypedExpr](#typedexpr) : `e`
+  - 36 `TBreak`
+  - 37 `TContinue`
+  - 38 `TThrow(e)`
+    - [TypedExpr](#typedexpr) : `e`
+  - 39 `TCast(e, null)` (unsafe cast),
+  - 40 `TCast(e, m)` (safe cast to class),
+  - 41 `TCast(e, m)` (safe cast to enum),
+  - 42 `TCast(e, m)` (safe cast to typedef),
+  - 43 `TCast(e, m)` (safe cast to abstract)
+    - [TypedExpr](#typedexpr) : `e`
+    - (if 40) [ClassRef](#classref) : `m`
+    - (if 41) [EnumRef](#enumref) : `m`
+    - (if 42) [DefRef](#defref) : `m`
+    - (if 43) [AbstractRef](#abstractref) : `m`
+  - 44 `TMeta(m, e)`
+    - [MetadataEntry](#metadataentry) : `m`
+    - [TypedExpr](#typedexpr) : `e`
+  - 45 `TEnumParameter(e, ef, index)`
+    - [TypedExpr](#typedexpr) : `e`
+    - [EnumFieldRef](#enumfieldref) : `ef`
+    - [uleb128](#uleb128) : `index`
+  - 46 `TEnumIndex(e)`
+    - [TypedExpr](#typedexpr) : `e`
+  - 47 `TIdent(s)`
+    - [pstr](#pstr) : `s`
+
+### `TObjectField`
+
+(tuple in `texpr_expr.TObjectDecl` in `type.ml`)
+
+- [pstr](#pstr) : field name
+- [pos](#pos) : position of name
+- [bools](#bools)(1)
+  - quoted
+- [TypedExpr](#typedexpr) : expression
+
+### `TCase`
+
+(tuple in `texpr_expr.TSwitch` in `type.ml`)
+
+- [arr](#arr) [TypedExpr](#typedexpr) : matched values
+- [TypedExpr](#typedexpr) : expression
+
+### `TCatch`
+
+(tuple in `texpr_expr.TTry` in `type.ml`)
+
+- [TVar](#tvar) : exception variable
+- [TypedExpr](#typedexpr) : catch expression
 
 ### `TypedExpr(e)`
 
-- TypedExprDef e.expr
-- pos e.pos
-- cache Type e.t
+(`texpr` in `type.ml`)
 
-### `ParamClassType(c, params)`
+- [TypedExprDef](#typedexprdef) : `eexpr`
+- [Type](#type) : `etype`
+- [pos](#pos) : `epos`
 
-- ClassType c
-- arr cache Type params
+### `BaseType(c)`
 
-### `ModuleType`
+(`tinfos` in `type.ml`)
 
-- enum
-  - 0 TClassDecl(c)
-    - ClassType c
-  - 1 TEnumDecl(c)
-    - EnumType c
-  - 2 TTypeDecl(c)
-    - DefType c
-  - 3 TAbstractDecl(c)
-    - AbstractType c
+- [Path](#path) : `mt_path`
+- [pos](#pos) : `mt_pos`
+- [pos](#pos) : `mt_name_pos`
+- [bools](#bools)(1)
+  - `mt_private`
+- [doc](#doc) : `mt_doc`
+- [arr](#arr) [MetadataEntry](#metadataentry) : `mt_meta`
+- [TypeParams](#typeparams) : `mt_params`
+- [arr](#arr) [ClassUsing](#classusing) : `mt_using`
 
-### `FileEntry`
+Fields which are not serialised:
 
-- enum
-  - 0 ModuleType(m)
-    - cache ModuleType m
+- `mt_module` - belongs to the module defined in the current [TypeDeclarations](#typedeclarations) chunk
 
-### `File`
+### `ClassUsing`
 
-- ... signature "hxb1"
-- bools(2) config
-  - store docs
-  - store positions
-- ... FileEntry until EOF
+(tuple in `tinfos` in `type.ml`)
+
+- [ClassRef](#classref)
+- [pos](#pos)
+
+### `ClassField`
+
+(`tclass_field` in `type.ml`)
+
+- [pstr](#pstr) : `cf_name`
+- [Type](#type) : `cf_type`
+- [pos](#pos) : `cf_pos`
+- [pos](#pos) : `cf_name_pos`
+- [doc](#doc) : `cf_doc`
+- [arr](#arr) [MetadataEntry](#metadataentry) : `cf_meta`
+- [enum](#enum) : `cf_kind`
+  - 0 `Method(MethNormal)`
+  - 1 `Method(Inline)`
+  - 2 `Method(Dynamic)`
+  - 3 `Method(Macro)`
+  - 10-234 `Var(r, w)` - index = 10 + r * 15 + w, where r or w is:
+    - 0 `AccNormal`
+    - 1 `AccNo`
+    - 2 `AccNever`
+    - 3 `AccCtor`
+    - 4 `AccResolve`
+    - 5 `AccCall`
+    - 6 `AccInline`
+    - 7 `AccRequire(r, msg)`
+    - (for r, w that are `AccRequire`)
+      - [pstr](#pstr) : `r`
+      - [nullable](#nullable) [pstr](#pstr) : `msg`
+- [TypeParams](#typeparams) : `cf_params`
+- [nullable](#nullable) [TypedExpr](#typedexpr) : `cf_expr`
+- [nullable](#nullable) [TFunc](#tfunc) : `cf_expr_unoptimized`
+- [arr](#arr) [ClassFieldRef](#classfieldref) : `cf_overloads`
+- [bools](#bools)(5) : `cf_flags`
+  - `CfPublic`
+  - `CfExtern`
+  - `CfFinal`
+  - `CfOverridden`
+  - `CfModifiesThis`
+
+### `ClassType`
+
+(`tclass` and `tclass_kind` in `type.ml`)
+
+- [BaseType](#basetype) : (infos)
+- [enum](#enum) : `cl_kind`
+  - 0 `KNormal`
+  - 1 `KTypeParameter(constraints)`
+    - [arr](#arr) [Type](#type) : `constraints`
+  - 2 `KExpr(e)`
+    - [Expr](#expr) : `e`
+  - 3 `KGeneric`
+  - 4 `KGenericInstance(cl, params)`
+    - [ParamClassType](#paramclasstype) : `cl`, `params`
+  - 5 `KMacroType`
+  - 6 `KGenericBuild(...)`
+    - TODO
+  - 7 `KAbstractImpl(a)`
+    - [AbstractRef](#abstractref) : `a`
+- [bools](#bools)(3)
+  - `cl_extern`
+  - `cl_final`
+  - `cl_interface`
+- [nullable](#nullable) [ParamClassType](#paramclasstype) : `cl_super`
+- [arr](#arr) [ParamClassType](#paramclasstype) : `cl_implements`
+- [arr](#arr) ClassField : `cl_ordered_fields`
+- [arr](#arr) ClassField : `cl_ordered_statics`
+- [nullable](#nullable) [Type](#type) : `cl_dynamic`
+- [nullable](#nullable) [Type](#type) : `cl_array_access`
+- [nullable](#nullable) [ClassFieldRef](#classfieldref) : `cl_constructor`
+- [nullable](#nullable) [TypedExpr](#typedexpr) : `cl_init`
+- [arr](#arr) [ClassFieldRef](#classfieldref) : `cl_overrides`
+
+Fields which are not serialised:
+
+- `cl_statics`, `cl_fields` - can be deserialised from the ordered lists
+- `cl_build`, `cl_restore` - functions
+- `cl_descendants` - populated automatically in postprocessing
+
+### `ParamClassType`
+
+(`(tclass * tparams)` in `type.ml`)
+
+- [ClassRef](#classref)
+- [arr](#arr) [Type](#type)
+
+### `EnumField`
+
+(`tenum_field` in `type.ml`)
+
+- [pstr](#pstr) : `ef_name`
+- [Type](#type) : `ef_type`
+- [pos](#pos) : `ef_pos`
+- [pos](#pos) : `ef_name_pos`
+- [doc](#doc) : `ef_doc`
+- [TypeParams](#typeparams) : `ef_params`
+- [arr](#arr) [MetadataEntry](#metadataentry) : `ef_meta`
+
+Fields which are not serialised:
+
+- `ef_index` - enum constructors are declared in order, first `ef_index` is `0`
+
+### `EnumType`
+
+(`tenum` in `type.ml`)
+
+- [BaseType](#basetype) : (infos)
+- [DefType](#deftype) : `e_type`
+- [bools](#bools)(1)
+  - `e_extern`
+- [arr](#arr) [EnumField](#enumfield) : values of `e_constrs`, in the order of `e_names`
+
+Fields which are not serialised:
+
+- `e_names` - [EnumField](#enumfield) stores the constructor name
+
+### `DefType`
+
+(`tdef` in `type.ml`)
+
+- [BaseType](#basetype) : (infos)
+- [Type](#type) : `t_type`
+
+### `AbstractType`
+
+(`tabstract` in `type.ml`)
+
+- [BaseType](#basetype) : (infos)
+- [arr](#arr) [AbstractBinop](#abstractbinop) : `a_ops`
+- [arr](#arr) [AbstractUnop](#abstractunop) : `a_unops`
+- [nullable](#nullable) [ClassRef](#classref) : `a_impl`
+- [Type](#type) : `a_this`
+- [arr](#arr) [Type](#type) : `a_from`
+- [arr](#arr) [AbstractFromTo](#abstractfromto) : `a_from_field`
+- [arr](#arr) [Type](#type) : `a_to`
+- [arr](#arr) [AbstractFromTo](#abstractfromto) : `a_to_field`
+- [arr](#arr) [ClassFieldRef](#classfieldref) : `a_array`
+- [nullable](#nullable) [ClassFieldRef](#classfieldref) : `a_read`
+- [nullable](#nullable) [ClassFieldRef](#classfieldref) : `a_write`
+
+### `AbstractBinop`
+
+(tuple in `tabstract` in `type.ml`)
+
+- [Binop](#binop)
+- [ClassFieldRef](#classfieldref)
+
+### `AbstractUnop`
+
+(tuple in `tabstract` in `type.ml`)
+
+- [Unop](#unop) : operator and prefix/postfix flag
+- [ClassFieldRef](#classfieldref)
+
+### `AbstractFromTo`
+
+(tuple in `tabstract` in `type.ml`)
+
+- [Type](#type)
+- [ClassFieldRef](#classfieldref)
