@@ -18,7 +18,7 @@ A `hxb` file has the following structure:
   - [TypeList](#typelist)
   - [FieldList](#fieldlist)
   - [TypeDeclarations](#typedeclarations)
-  - [MoudleExtra](#moduleextra)
+  - [ModuleExtra](#moduleextra)
 - [End](#end) : end chunk
 
 A `hxb` file corresponds to exactly one Haxe module (`module_def` in `type.ml`).
@@ -38,16 +38,14 @@ A "public" chunk is specified in this document. Applications may define their ow
   - bool : case of third byte - uppercase (reserved for future use)
   - bool : case of fourth byte - uppercase (reserved for future use)
 - (bytes) : data; specific to each chunk
-- [u32](#u32) : CRC-32 checksum 
+- [u32](#u32) : CRC-32 checksum
 
 ### `Header`
 
 [Chunk](#chunk) with identifier `"HHDR"` and data:
 
-- [bools](#bools)(1) config
-  - store positions
+- [bool](#bool) : config - store positions
 - [Path](#path) : `m_path`
-- [str](#str) : `m_file`
 
 ### `End`
 
@@ -73,14 +71,14 @@ Docstrings are stored separately from other strings in this chunk.
 
 [Chunk](#chunk) with identifier `"TYPL"` and data:
 
-- [arr](#arr) [TypePath](#typepath) : external classes
-- [arr](#arr) [TypePath](#typepath) : external enums
-- [arr](#arr) [TypePath](#typepath) : external abstracts
-- [arr](#arr) [TypePath](#typepath) : external typedefs
-- [arr](#arr) [str](#str) : classes declared in this module
-- [arr](#arr) [str](#str) : enums declared in this module
-- [arr](#arr) [str](#str) : abstracts declared in this module
-- [arr](#arr) [str](#str) : typedefs declared in this module
+- [arr](#arr) [Path](#path) : external classes
+- [arr](#arr) [Path](#path) : external enums
+- [arr](#arr) [Path](#path) : external abstracts
+- [arr](#arr) [Path](#path) : external typedefs
+- [arr](#arr) [ForwardType](#forwardtype) : classes declared in this module
+- [arr](#arr) [ForwardType](#forwardtype) : enums declared in this module
+- [arr](#arr) [ForwardType](#forwardtype) : abstracts declared in this module
+- [arr](#arr) [ForwardType](#forwardtype) : typedefs declared in this module
 
 A class is referenced with a single index, which can refer to both external and internal classes. An index that is within range of the external classes array represents a reference to an external class. Otherwise, the length of the external classes array is subtracted from the index and the result is the index in the internal classes array. Enums, abstracts, and typedefs are indexed in the same way using their respective arrays.
 
@@ -184,12 +182,16 @@ Unsigned [LEB128](https://en.wikipedia.org/wiki/LEB128).
 
 A `str` may be used to represent arbitrary binary data.
 
-### `arr T`
+### `arr`
 
 - [uleb128](#uleb128) : array length
 - T... : 0 or more entries
 
-### `bools(n)`
+### `bool`
+
+- [u8](#u8) : `0` = `false`, `1` = `true`
+
+### `bools`
 
 `floor((n + 7) / 8)` bytes. `n` boolean flags stored in successive bytes. LSB first, little-endian.
 
@@ -198,7 +200,7 @@ A `str` may be used to represent arbitrary binary data.
 - [u8](#u8) : for enum case
 - ... : associated data for case, if any
 
-### `nullable T`
+### `nullable`
 
 - [u8](#u8) : present
 - T : (if present) data
@@ -221,7 +223,7 @@ No data when positions not encoded, as specified in the [Header](#header) chunk.
 - [leb128](#leb128) :
   - least significant bit: bool : file present?
   - remaining bits: [delta](#delta) : `pmax`
-- (if file present) [cache](#cache) [str](#str) : `pfile`
+- (if file present) [pstr](#pstr) : `pfile`
 
 If file is not present, it is the same as the last decoded `pos`. The first `pos` in a chunk must always have a file present.
 
@@ -238,15 +240,26 @@ An index in the array in the last [StringPool](#stringpool) chunk is stored. The
 
 - [uleb128](#uleb128) : string index
 
-### `ClassRef`, `EnumRef`, `AbstractRef`, `DefRef`
+### `ClassRef`
+### `EnumRef`
+### `AbstractRef`
+### `DefRef`
 
 - [uleb128](#uleb128) : index in the corresponding [TypeList](#typelist) array
 
 See [TypeList](#typelist) for indexing method.
 
-### `ClassFieldRef`, `EnumFieldRef`
+### `ClassFieldRef`
+### `EnumFieldRef`
 
 - [uleb128](#uleb128) : index in the corresponding [FieldList](#fieldlist) array
+
+### `ForwardType`
+
+- [str](#str) : type name
+- [pos](#pos) : position
+- [pos](#pos) : name position
+- [bool](#bool) : private
 
 ### `Binop`
 
@@ -377,7 +390,7 @@ Unary operators are always referenced with a postfix boolean, hence this enum ha
 
 - [arr](#arr) [TypeParamDecl](#typeparamdecl) : `f_params`
 - [arr](#arr) [FunctionArg](#functionarg) : `f_args`
-- [TypeHint](#typehint) : `f_type`
+- [nullable](#nullable) [TypeHint](#typehint) : `f_type`
 - [Expr](#expr) : `f_expr`
 
 ### `FunctionArg`
@@ -385,11 +398,10 @@ Unary operators are always referenced with a postfix boolean, hence this enum ha
 (tuple in `func` in `ast.ml`)
 
 - [PlacedName](#placedname) : argument name
-- [bools](#bools)(1)
-  - optional
+- [bool](#bool) : optional
+- [arr](#arr) [MetadataEntry](#metadataentry) : metadata
 - [nullable](#nullable) [TypeHint](#typehint) : argument type
 - [nullable](#nullable) [Expr](#expr) : default value
-- [arr](#arr) [MetadataEntry](#metadataentry) : metadata
 
 ### `PlacedName`
 
@@ -436,9 +448,8 @@ Unary operators are always referenced with a postfix boolean, hence this enum ha
   - 12 `EFunction(FKNamed(name, inlined), f)`,
   - 13 `EFunction(FKArrow, f)`
     - [Function](#function) : `f`
-    - (if 12) [pstr](#pstr) : `name`
-    - (if 12) [bools](#bools)(1)
-      - `inlined`
+    - (if 12) [PlacedName](#PlacedName) : `name`
+    - (if 12) [bool](#bool) : `inlined`
   - 14 `EBlock(exprs)`
     - [arr](#arr) [Expr](#expr) : `exprs`
   - 15 `EFor(it, expr)`
@@ -505,8 +516,7 @@ Unary operators are always referenced with a postfix boolean, hence this enum ha
 
 - [pstr](#pstr) : field name
 - [pos](#pos) : position of name
-- [bools](#bools)(1)
-  - quoted
+- [bool](#bool) : quoted
 - [Expr](#expr) : expression
 
 ### `Var`
@@ -514,8 +524,7 @@ Unary operators are always referenced with a postfix boolean, hence this enum ha
 (tuple in `expr_def.EVars` in `ast.ml`)
 
 - [PlacedName](#placedname) : variable name
-- [bools](#bools)(1)
-  - final
+- [bool](#bool) : final
 - [nullable](#nullable) [TypeHint](#typehint) : variable type
 - [nullable](#nullable) [Expr](#expr) : expression
 
@@ -550,7 +559,7 @@ Unary operators are always referenced with a postfix boolean, hence this enum ha
 
 TODO: recursion?
 
-- [pstr](#pstr) : `tp_name`
+- [PlacedName](#placedname) : `tp_name`
 - [arr](#arr) [TypeParamDecl](#typeparamdecl) : `tp_params`
 - [nullable](#nullable) [TypeHint](#typehint) : `tp_constraints`
 - [arr](#arr) [MetadataEntry](#metadataentry) : `tp_meta`
@@ -595,7 +604,7 @@ TODO: index well-known metas in an enum?
 
 (`class_field` and `class_field_kind` in `ast.ml`)
 
-- [pstr](#pstr) : `cff_name`
+- [PlacedName](#placedname) : `cff_name`
 - [doc](#doc) : `cff_doc`
 - [pos](#pos) : `cff_pos`
 - [arr](#arr) [MetadataEntry](#metadataentry) : `cff_meta`
@@ -676,8 +685,7 @@ In case of `TLazy`, resolve, then encode result.
 (tuple in `tsignature` in `type.ml`)
 
 - [pstr](#pstr) : argument name
-- [bools](#bools)(1)
-  - optional
+- [bool](#bool) : optional
 - [Type](#type) : type
 
 ### `TypeParams`
@@ -735,6 +743,7 @@ In case of `TLazy`, resolve, then encode result.
   - `v_final`
 - [nullable](#nullable) [TVarExtra](#tvarextra) : `v_extra`
 - [arr](#arr) [MetadataEntry](#metadataentry) : `v_meta`
+- [pos](#pos) : `v_pos`
 
 ### `TFunc`
 
@@ -759,16 +768,16 @@ TODO: references, fields?
 
 - ... `a_fields`
 - [enum](#enum) : `a_status`
-  - 0 `AClosed`
-  - 1 `AOpened`
-  - 2 `AConst`
-  - 3 `AExtend(tl)`
+  - 0 `Closed`
+  - 1 `Opened`
+  - 2 `Const`
+  - 3 `Extend(tl)`
     - [Type](#type) : `tl`
-  - 4 `AClassStatics(t)`
+  - 4 `Statics(t)`
     - [TClass](#tclass) : `t`
-  - 5 `AEnumStatics(t)`
+  - 5 `EnumStatics(t)`
     - [TEnum](#tenum) : `t`
-  - 6 `AAbstractStatics(t)`
+  - 6 `AbstractStatics(t)`
     - [TAbstract](#tabstract) : `t`
 
 ### `TypedExprDef`
@@ -905,8 +914,7 @@ TODO: references, fields?
 
 - [pstr](#pstr) : field name
 - [pos](#pos) : position of name
-- [bools](#bools)(1)
-  - quoted
+- [bool](#bool) : quoted
 - [TypedExpr](#typedexpr) : expression
 
 ### `TCase`
@@ -923,7 +931,7 @@ TODO: references, fields?
 - [TVar](#tvar) : exception variable
 - [TypedExpr](#typedexpr) : catch expression
 
-### `TypedExpr(e)`
+### `TypedExpr`
 
 (`texpr` in `type.ml`)
 
@@ -931,15 +939,10 @@ TODO: references, fields?
 - [Type](#type) : `etype`
 - [pos](#pos) : `epos`
 
-### `BaseType(c)`
+### `BaseType`
 
 (`tinfos` in `type.ml`)
 
-- [Path](#path) : `mt_path`
-- [pos](#pos) : `mt_pos`
-- [pos](#pos) : `mt_name_pos`
-- [bools](#bools)(1)
-  - `mt_private`
 - [doc](#doc) : `mt_doc`
 - [arr](#arr) [MetadataEntry](#metadataentry) : `mt_meta`
 - [TypeParams](#typeparams) : `mt_params`
@@ -948,6 +951,7 @@ TODO: references, fields?
 Fields which are not serialised:
 
 - `mt_module` - belongs to the module defined in the current [TypeDeclarations](#typedeclarations) chunk
+- `mt_path`, `mt_pos`, `mt_name_pos`, `mt_private` - serialised in the [TypeDeclarations](#typedeclarations) chunk
 
 ### `ClassUsing`
 
@@ -968,9 +972,9 @@ Fields which are not serialised:
 - [arr](#arr) [MetadataEntry](#metadataentry) : `cf_meta`
 - [enum](#enum) : `cf_kind`
   - 0 `Method(MethNormal)`
-  - 1 `Method(Inline)`
-  - 2 `Method(Dynamic)`
-  - 3 `Method(Macro)`
+  - 1 `Method(MethInline)`
+  - 2 `Method(MethDynamic)`
+  - 3 `Method(MethMacro)`
   - 10-234 `Var(r, w)` - index = 10 + r * 15 + w, where r or w is:
     - 0 `AccNormal`
     - 1 `AccNo`
@@ -1009,8 +1013,8 @@ Fields which are not serialised:
   - 4 `KGenericInstance(cl, params)`
     - [ParamClassType](#paramclasstype) : `cl`, `params`
   - 5 `KMacroType`
-  - 6 `KGenericBuild(...)`
-    - TODO
+  - 6 `KGenericBuild(fields)`
+    - [arr](#arr) [Field](#field) : `fields`
   - 7 `KAbstractImpl(a)`
     - [AbstractRef](#abstractref) : `a`
 - [bools](#bools)(3)
@@ -1019,8 +1023,8 @@ Fields which are not serialised:
   - `cl_interface`
 - [nullable](#nullable) [ParamClassType](#paramclasstype) : `cl_super`
 - [arr](#arr) [ParamClassType](#paramclasstype) : `cl_implements`
-- [arr](#arr) ClassField : `cl_ordered_fields`
-- [arr](#arr) ClassField : `cl_ordered_statics`
+- [arr](#arr) [ClassField](#classfield) : `cl_ordered_fields`
+- [arr](#arr) [ClassField](#classfield) : `cl_ordered_statics`
 - [nullable](#nullable) [Type](#type) : `cl_dynamic`
 - [nullable](#nullable) [Type](#type) : `cl_array_access`
 - [nullable](#nullable) [ClassFieldRef](#classfieldref) : `cl_constructor`
